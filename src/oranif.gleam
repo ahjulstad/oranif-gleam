@@ -214,6 +214,10 @@ pub fn with_params(query: Query, params: List(Param)) -> Query {
   )
 }
 
+pub fn bind_all(query: Query, params: List(Param)) -> Query {
+  with_params(query, params)
+}
+
 pub fn label(query: Query, name: String) -> Query {
   let Query(sql, params, identity, expectation, _label) = query
   Query(sql:, params:, identity:, expectation:, label: Some(name))

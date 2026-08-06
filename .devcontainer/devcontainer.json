@@ -1,0 +1,25 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "Gleam + Oracle Free",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "main",
+	"runServices": [
+		"main",
+		"oracle"
+	],
+	"workspaceFolder": "/workspaces/oranif-gleam",
+	"shutdownAction": "stopCompose",
+	"remoteEnv": {
+		"OTP_ROOT": "/usr/local/otp",
+		"PATH": "/home/vscode/.local/bin:/usr/local/otp/bin:${containerEnv:PATH}"
+		// Old Linuxbrew path (disabled): "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:${containerEnv:PATH}"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"Gleam.gleam"
+			]
+		}
+	}
+}

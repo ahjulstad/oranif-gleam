@@ -1,0 +1,48 @@
+services:
+  main:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    stdin_open: true
+    tty: true
+    volumes:
+      - ..:/workspaces/oranif-gleam:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      ORACLE_HOST: oracle
+      ORACLE_PORT: "1521"
+      ORACLE_SERVICE: FREEPDB1
+      ORACLE_USER: TEST_APP
+      ORACLE_PASSWORD: LocalOracleApp_2026!
+      ORACLE_SCHEMA: TEST_APP
+      ORACLE_CONNECTION_STRING: (DESCRIPTION=(ADDRESS_LIST=(ADDRESS=(PROTOCOL=TCP)(HOST=oracle)(PORT=1521)))(CONNECT_DATA=(SERVICE_NAME=FREEPDB1)))
+      LD_LIBRARY_PATH: /opt/instantclient_21_20
+    networks:
+      - default
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+  oracle:
+    image: gvenzl/oracle-free:latest
+    environment:
+      ORACLE_PASSWORD: LocalOracleSys_2026!
+      APP_USER: TEST_APP
+      APP_USER_PASSWORD: LocalOracleApp_2026!
+    ports:
+      - "1529:1521"
+    volumes:
+      - ./.devcontainer/oracle-startup:/opt/oracle/scripts/startup:ro
+    networks:
+      - default
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+networks:
+  default:
+    name: oranif_gleam_dev_default
+    driver: bridge

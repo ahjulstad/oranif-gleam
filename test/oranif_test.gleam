@@ -62,6 +62,20 @@ pub fn bind_bools_and_floats_render_in_order_test() {
   assert built == Ok("select 1, 0, 3.5 from dual")
 }
 
+pub fn bind_all_accepts_mixed_param_lists_test() {
+  let built =
+    oranif.query("select ?, ?, ?, ? from dual")
+    |> oranif.bind_all([
+      oranif.int_param(7),
+      oranif.string_param("Ada"),
+      oranif.bool_param(True),
+      oranif.null_param(),
+    ])
+    |> oranif.to_sql
+
+  assert built == Ok("select 7, 'Ada', 1, null from dual")
+}
+
 pub fn query_label_is_preserved_across_builders_test() {
   let built =
     oranif.scalar_query("select ? from dual")
