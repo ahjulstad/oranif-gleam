@@ -173,3 +173,18 @@ pub fn decode_rows_stops_on_first_decode_error_test() {
     _ -> panic as "expected DecodeError"
   }
 }
+
+pub fn first_string_decoder_returns_first_value_test() {
+  assert oranif.decode_row(
+      ["Ada", "ignored"],
+      using: oranif.first_string_decoder(),
+    )
+    == Ok("Ada")
+}
+
+pub fn first_string_decoder_returns_not_found_for_empty_row_test() {
+  case oranif.decode_row([], using: oranif.first_string_decoder()) {
+    Error(oranif.NotFound) -> Nil
+    _ -> panic as "expected NotFound"
+  }
+}

@@ -52,6 +52,17 @@ let reader = oranif.scope_as(pool, "TP_READER_1")
 let total =
 	oranif.scalar_query("select count(*) from app_users")
 	|> oranif.run_scalar_int_in(within: reader)
+
+let maybe_user =
+	oranif.row_query("select id, display_name from app_users where id = ?")
+	|> oranif.bind_int(99999)
+	|> oranif.run_maybe_decode_row(
+		on: pool,
+		using: oranif.pair_decoder(
+			first: oranif.int_decoder(),
+			second: oranif.string_decoder(),
+		),
+	)
 ```
 
 ### Core concepts
@@ -64,6 +75,7 @@ let total =
 - `run_decode` and reusable scalar decoders support type-directed result decoding.
 - `run_row` and `run_decode_row` fetch and decode the first returned row.
 - `run_rows` and `run_decode_rows` fetch and decode whole result sets.
+- `run_maybe_scalar`, `run_maybe_row`, and `run_maybe_decode_row` turn `NotFound` lookups into `Option` values.
 - `scope_as` plus `run_*_in` let you reuse pool and proxy identity context across many queries.
 - `map_scalar_decoder`, `map_row_decoder`, `pair_decoder`, and `triple_decoder` support reusable record-style decoders.
 - `to_sql` renders a query and validates placeholder/parameter counts.

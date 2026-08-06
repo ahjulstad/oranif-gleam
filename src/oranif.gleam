@@ -2,6 +2,7 @@ import gleam/dynamic
 import gleam/float
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import oranif/internal
 
@@ -653,6 +654,25 @@ pub fn run_scalar(query: Query, on pool: Pool) -> Result(String, Error) {
   }
 }
 
+pub fn run_maybe_scalar(
+  query: Query,
+  on pool: Pool,
+) -> Result(Option(String), Error) {
+  case run_scalar(query, on: pool) {
+    Ok(value) -> Ok(Some(value))
+    Error(NotFound) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
+}
+
+pub fn run_maybe_scalar_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(Option(String), Error) {
+  let Scope(pool, identity) = scope
+  run_maybe_scalar(apply_scope_identity(query, identity), on: pool)
+}
+
 pub fn run_scalar_in(
   query: Query,
   within scope: Scope,
@@ -669,6 +689,25 @@ pub fn run_row(query: Query, on pool: Pool) -> Result(List(String), Error) {
     Ok(Rows(_)) -> Error(DecodeError("expected row result"))
     Error(reason) -> Error(reason)
   }
+}
+
+pub fn run_maybe_row(
+  query: Query,
+  on pool: Pool,
+) -> Result(Option(List(String)), Error) {
+  case run_row(query, on: pool) {
+    Ok(values) -> Ok(Some(values))
+    Error(NotFound) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
+}
+
+pub fn run_maybe_row_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(Option(List(String)), Error) {
+  let Scope(pool, identity) = scope
+  run_maybe_row(apply_scope_identity(query, identity), on: pool)
 }
 
 pub fn run_row_in(
@@ -719,6 +758,35 @@ pub fn run_decode(
   }
 }
 
+pub fn run_maybe_decode(
+  query: Query,
+  on pool: Pool,
+  using decoder: ScalarDecoder(a),
+) -> Result(Option(a), Error) {
+  case run_maybe_scalar(query, on: pool) {
+    Ok(Some(value)) ->
+      case decode_scalar(value, using: decoder) {
+        Ok(decoded) -> Ok(Some(decoded))
+        Error(reason) -> Error(reason)
+      }
+    Ok(None) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
+}
+
+pub fn run_maybe_decode_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: ScalarDecoder(a),
+) -> Result(Option(a), Error) {
+  let Scope(pool, identity) = scope
+  run_maybe_decode(
+    apply_scope_identity(query, identity),
+    on: pool,
+    using: decoder,
+  )
+}
+
 pub fn run_decode_in(
   query: Query,
   within scope: Scope,
@@ -745,6 +813,35 @@ pub fn run_decode_row(
     Ok(values) -> decode_row(values, using: decoder)
     Error(reason) -> Error(reason)
   }
+}
+
+pub fn run_maybe_decode_row(
+  query: Query,
+  on pool: Pool,
+  using decoder: RowDecoder(a),
+) -> Result(Option(a), Error) {
+  case run_maybe_row(query, on: pool) {
+    Ok(Some(values)) ->
+      case decode_row(values, using: decoder) {
+        Ok(decoded) -> Ok(Some(decoded))
+        Error(reason) -> Error(reason)
+      }
+    Ok(None) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
+}
+
+pub fn run_maybe_decode_row_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: RowDecoder(a),
+) -> Result(Option(a), Error) {
+  let Scope(pool, identity) = scope
+  run_maybe_decode_row(
+    apply_scope_identity(query, identity),
+    on: pool,
+    using: decoder,
+  )
 }
 
 pub fn run_decode_row_in(
