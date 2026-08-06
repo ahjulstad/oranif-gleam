@@ -2,15 +2,12 @@
 
 Standalone Gleam wrapper around the Erlang oranif runtime (`dpi` module).
 
-## Status
+## Disclaimer
 
-This repository is the publishable source of truth for the Gleam wrapper.
-It includes:
+AI-authored, but supervised by me. I wanted to test Oracle OCI behaviour, and Gleam was a nice language. Hence, "can I make AI write an driver wrapping the Oracle driver that is nice to use?"
 
-- the public Gleam API
-- the Erlang bridge used at runtime
-- local Oracle-backed development and validation tooling
-- CI workflows for both fast package checks and Oracle-backed integration checks
+I don't know yet, but am about to find out. 
+
 
 ## Scope
 
