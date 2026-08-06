@@ -168,6 +168,22 @@ pub fn query(sql: String) -> Query {
   Query(sql:, params: [], identity: Direct, expectation: ExpectAffected)
 }
 
+pub fn command(sql: String) -> Query {
+  query(sql)
+}
+
+pub fn scalar_query(sql: String) -> Query {
+  query(sql) |> expect_scalar
+}
+
+pub fn row_query(sql: String) -> Query {
+  query(sql) |> expect_row
+}
+
+pub fn rows_query(sql: String) -> Query {
+  query(sql) |> expect_rows
+}
+
 pub fn with_param(query: Query, param: Param) -> Query {
   let Query(sql, params, identity, expectation) = query
   Query(sql:, params: list.append(params, [param]), identity:, expectation:)

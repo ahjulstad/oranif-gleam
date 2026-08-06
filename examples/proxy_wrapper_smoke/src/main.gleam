@@ -52,7 +52,7 @@ pub fn main() -> Nil {
       }
 
       case
-        oranif.query("select count(*) from TP_BACKEND_APP.gleam_wrapper_smoke")
+        oranif.scalar_query("select count(*) from TP_BACKEND_APP.gleam_wrapper_smoke")
         |> oranif.run_scalar_int_in(within: reader_scope)
       {
         Ok(value) -> io.println("rows=" <> string.inspect(value))
@@ -61,7 +61,7 @@ pub fn main() -> Nil {
       }
 
       case
-        oranif.query(
+        oranif.rows_query(
           "select id from TP_BACKEND_APP.gleam_wrapper_smoke order by updated_at desc fetch first 3 rows only",
         )
         |> oranif.run_decode_rows_in(
@@ -100,7 +100,7 @@ fn write_rows(pool: oranif.Pool, next_id: Int, remaining: Int) -> Nil {
       let writer_scope =
         oranif.scope_as(pool, nth_or_default(writers, idx, "TP_WRITER_1"))
       let sql =
-        oranif.query(
+        oranif.command(
           "insert into TP_BACKEND_APP.gleam_wrapper_smoke (id, payload, updated_at) values (?, ?, systimestamp)",
         )
         |> oranif.bind_int(next_id)
@@ -119,7 +119,7 @@ fn read_rows(pool: oranif.Pool, remaining: Int) -> Nil {
       let reader_scope =
         oranif.scope_as(pool, nth_or_default(readers, idx, "TP_READER_1"))
       let _ =
-        oranif.query(
+        oranif.rows_query(
           "select id from TP_BACKEND_APP.gleam_wrapper_smoke order by updated_at desc fetch first 20 rows only",
         )
         |> oranif.run_decode_rows_in(

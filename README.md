@@ -17,7 +17,7 @@ The wrapper now uses a composable query object with parameter binding-style buil
 import oranif
 
 let insert_user =
-	oranif.query("insert into app_users (id, display_name, active) values (?, ?, ?)")
+	oranif.command("insert into app_users (id, display_name, active) values (?, ?, ?)")
 	|> oranif.bind_int(42)
 	|> oranif.bind_string("Ada")
 	|> oranif.bind_bool(True)
@@ -26,13 +26,13 @@ let insert_user =
 let _ = oranif.run_affected(insert_user, on: pool)
 
 let count_users =
-	oranif.query("select count(*) from app_users")
+	oranif.scalar_query("select count(*) from app_users")
 	|> oranif.as_proxy_user("TP_READER_1")
 
 let total = oranif.run_scalar_int(count_users, on: pool)
 
 let latest_user =
-	oranif.query("select id, display_name from app_users where id = ?")
+	oranif.row_query("select id, display_name from app_users where id = ?")
 	|> oranif.bind_int(42)
 	|> oranif.run_decode_row(
 		on: pool,
@@ -43,14 +43,14 @@ let latest_user =
 	)
 
 let active_ids =
-	oranif.query("select id from app_users where active = ? order by id")
+	oranif.rows_query("select id from app_users where active = ? order by id")
 	|> oranif.bind_bool(True)
 	|> oranif.run_decode_rows(on: pool, using: oranif.first_int_decoder())
 
 let reader = oranif.scope_as(pool, "TP_READER_1")
 
 let total =
-	oranif.query("select count(*) from app_users")
+	oranif.scalar_query("select count(*) from app_users")
 	|> oranif.run_scalar_int_in(within: reader)
 ```
 
@@ -59,6 +59,7 @@ let total =
 - `Query` carries SQL, params, identity context, and expected result mode.
 - `bind_int`, `bind_string`, `bind_bool`, `bind_float`, and `bind_null` cover common `?` placeholder values.
 - `with_param` / `with_params` remain available for lower-level composition.
+- `command`, `scalar_query`, `row_query`, and `rows_query` declare query intent up front.
 - `run`, `run_affected`, `run_scalar`, and typed scalar helpers execute queries.
 - `run_decode` and reusable scalar decoders support type-directed result decoding.
 - `run_row` and `run_decode_row` fetch and decode the first returned row.
