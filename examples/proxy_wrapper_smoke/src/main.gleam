@@ -8,6 +8,10 @@ const writers = ["TP_WRITER_1", "TP_WRITER_2"]
 
 const readers = ["TP_READER_1", "TP_READER_2", "TP_READER_3", "TP_READER_4"]
 
+type SessionOption {
+  SessionOption(tag: String, module: String)
+}
+
 pub fn main() -> Nil {
   let config =
     oranif.default_config()
@@ -31,6 +35,8 @@ pub fn main() -> Nil {
       let _ = grant("insert", writers, pool)
       let _ = grant("select", readers, pool)
       let reader_scope = oranif.scope_as(pool, "TP_READER_1")
+
+      run_tagged_session_smoke(pool)
 
       let trace = oranif.start_trace(pool, 10)
 
@@ -149,4 +155,122 @@ fn nth_or_default(items: List(String), index: Int, default: String) -> String {
 
 fn format_ints(values: List(Int)) -> String {
   "[" <> string.join(list.map(values, int.to_string), with: ",") <> "]"
+}
+
+fn run_tagged_session_smoke(pool: oranif.Pool) -> Nil {
+  let initializer =
+    oranif.session_init(
+      fn(option) {
+        let SessionOption(tag, _module) = option
+        "SESSION=" <> tag
+      },
+      fn(option) {
+        let SessionOption(_tag, module) = option
+        [
+          oranif.SetModule(module, "SESSION_INIT"),
+        ]
+      },
+    )
+  let prepared = oranif.prepare_pool(pool, with: initializer)
+  let scope_a =
+    oranif.scope_as_with(
+      prepared,
+      "TP_READER_1",
+      SessionOption(tag: "A", module: "SESSION_A"),
+    )
+  let scope_a_again =
+    oranif.scope_as_with(
+      prepared,
+      "TP_READER_1",
+      SessionOption(tag: "A", module: "SESSION_A"),
+    )
+  let scope_b =
+    oranif.scope_as_with(
+      prepared,
+      "TP_READER_1",
+      SessionOption(tag: "B", module: "SESSION_B"),
+    )
+
+  let trace = case oranif.start_trace(pool, 5) {
+    Ok(handle) -> handle
+    Error(error) -> {
+      io.println("tagged trace start failed: " <> oranif.error_message(error))
+      panic as "tagged trace start failed"
+    }
+  }
+
+  assert_module(scope_a, "SESSION_A")
+  assert_module(scope_a_again, "SESSION_A")
+  assert_module(scope_b, "SESSION_B")
+
+  let samples = case oranif.stop_trace(trace) {
+    Ok(samples) -> samples
+    Error(error) -> {
+      io.println("tagged trace stop failed: " <> oranif.error_message(error))
+      panic as "tagged trace stop failed"
+    }
+  }
+  let #(reader_init_delta, reader_hit_delta) = reader_metrics_delta(samples)
+
+  let total_events = reader_init_delta + reader_hit_delta
+
+  case total_events == 3 && reader_init_delta >= 2 && reader_init_delta <= 3 {
+    True ->
+      io.println(
+        "tagged session deltas=init:"
+        <> int.to_string(reader_init_delta)
+        <> ",hit:"
+        <> int.to_string(reader_hit_delta),
+      )
+    False -> {
+      io.println(
+        "expected tagged transitions across three probes, got init="
+        <> int.to_string(reader_init_delta)
+        <> " hit="
+        <> int.to_string(reader_hit_delta),
+      )
+      panic as "tagged init/hit transition assertion failed"
+    }
+  }
+}
+
+fn assert_module(scope: oranif.Scope, expected: String) -> Nil {
+  let actual = case
+    oranif.scalar_query("select sys_context('USERENV','MODULE') from dual")
+    |> oranif.run_scalar_in(within: scope)
+  {
+    Ok(module) -> module
+    Error(error) -> {
+      io.println("module probe failed: " <> oranif.error_message(error))
+      panic as "module probe failed"
+    }
+  }
+
+  case actual == expected {
+    True -> Nil
+    False -> {
+      io.println("expected module " <> expected <> " but got " <> actual)
+      panic as "module assertion failed"
+    }
+  }
+}
+
+fn reader_metrics_delta(samples: List(oranif.TraceSample)) -> #(Int, Int) {
+  case samples {
+    [] -> #(0, 0)
+    [first, ..] -> {
+      let last = case list.reverse(samples) {
+        [value, ..] -> value
+        [] -> first
+      }
+      let oranif.TraceSample(_, _, _, _, first_reader_init, _, first_reader_hit) =
+        first
+      let oranif.TraceSample(_, _, _, _, last_reader_init, _, last_reader_hit) =
+        last
+      #(
+        last_reader_init - first_reader_init,
+        last_reader_hit - first_reader_hit,
+      )
+    }
+  }
 }
