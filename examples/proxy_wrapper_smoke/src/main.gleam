@@ -53,7 +53,10 @@ pub fn main() -> Nil {
 
       case
         oranif.scalar_query("select count(*) from TP_BACKEND_APP.gleam_wrapper_smoke")
-        |> oranif.run_scalar_int_in(within: reader_scope)
+        |> oranif.scalar_as_type_in(
+          within: reader_scope,
+          using: oranif.int_decoder(),
+        )
       {
         Ok(value) -> io.println("rows=" <> string.inspect(value))
         Error(error) ->
@@ -64,7 +67,7 @@ pub fn main() -> Nil {
         oranif.rows_query(
           "select id from TP_BACKEND_APP.gleam_wrapper_smoke order by updated_at desc fetch first 3 rows only",
         )
-        |> oranif.run_decode_rows_in(
+        |> oranif.all_in(
           within: reader_scope,
           using: oranif.first_int_decoder(),
         )
@@ -105,7 +108,7 @@ fn write_rows(pool: oranif.Pool, next_id: Int, remaining: Int) -> Nil {
         )
         |> oranif.bind_int(next_id)
         |> oranif.bind_string("p-" <> int.to_string(next_id))
-      let _ = oranif.run_affected_in(sql, within: writer_scope)
+      let _ = oranif.exec_in(sql, within: writer_scope)
       write_rows(pool, next_id + 1, remaining - 1)
     }
   }
@@ -122,7 +125,7 @@ fn read_rows(pool: oranif.Pool, remaining: Int) -> Nil {
         oranif.rows_query(
           "select id from TP_BACKEND_APP.gleam_wrapper_smoke order by updated_at desc fetch first 20 rows only",
         )
-        |> oranif.run_decode_rows_in(
+        |> oranif.all_in(
           within: reader_scope,
           using: oranif.first_int_decoder(),
         )

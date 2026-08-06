@@ -709,12 +709,20 @@ pub fn run_affected(query: Query, on pool: Pool) -> Result(Nil, Error) {
   }
 }
 
+pub fn exec(query: Query, on pool: Pool) -> Result(Nil, Error) {
+  run_affected(query, on: pool)
+}
+
 pub fn run_affected_in(
   query: Query,
   within scope: Scope,
 ) -> Result(Nil, Error) {
   let Scope(pool, identity) = scope
   run_affected(apply_scope_identity(query, identity), on: pool)
+}
+
+pub fn exec_in(query: Query, within scope: Scope) -> Result(Nil, Error) {
+  run_affected_in(query, within: scope)
 }
 
 pub fn run_scalar(query: Query, on pool: Pool) -> Result(String, Error) {
@@ -831,6 +839,22 @@ pub fn run_decode(
   }
 }
 
+pub fn scalar_as_type(
+  query: Query,
+  on pool: Pool,
+  using decoder: ScalarDecoder(a),
+) -> Result(a, Error) {
+  run_decode(query, on: pool, using: decoder)
+}
+
+pub fn scalar_as_type_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: ScalarDecoder(a),
+) -> Result(a, Error) {
+  run_decode_in(query, within: scope, using: decoder)
+}
+
 pub fn run_maybe_decode(
   query: Query,
   on pool: Pool,
@@ -845,6 +869,22 @@ pub fn run_maybe_decode(
     Ok(None) -> Ok(None)
     Error(reason) -> Error(reason)
   }
+}
+
+pub fn maybe_scalar_as_type(
+  query: Query,
+  on pool: Pool,
+  using decoder: ScalarDecoder(a),
+) -> Result(Option(a), Error) {
+  run_maybe_decode(query, on: pool, using: decoder)
+}
+
+pub fn maybe_scalar_as_type_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: ScalarDecoder(a),
+) -> Result(Option(a), Error) {
+  run_maybe_decode_in(query, within: scope, using: decoder)
 }
 
 pub fn run_maybe_decode_in(
@@ -888,6 +928,14 @@ pub fn run_decode_row(
   }
 }
 
+pub fn one(
+  query: Query,
+  on pool: Pool,
+  using decoder: RowDecoder(a),
+) -> Result(a, Error) {
+  run_decode_row(query, on: pool, using: decoder)
+}
+
 pub fn run_maybe_decode_row(
   query: Query,
   on pool: Pool,
@@ -904,6 +952,14 @@ pub fn run_maybe_decode_row(
   }
 }
 
+pub fn maybe_one(
+  query: Query,
+  on pool: Pool,
+  using decoder: RowDecoder(a),
+) -> Result(Option(a), Error) {
+  run_maybe_decode_row(query, on: pool, using: decoder)
+}
+
 pub fn run_maybe_decode_row_in(
   query: Query,
   within scope: Scope,
@@ -917,6 +973,14 @@ pub fn run_maybe_decode_row_in(
   )
 }
 
+pub fn maybe_one_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: RowDecoder(a),
+) -> Result(Option(a), Error) {
+  run_maybe_decode_row_in(query, within: scope, using: decoder)
+}
+
 pub fn run_decode_row_in(
   query: Query,
   within scope: Scope,
@@ -928,6 +992,14 @@ pub fn run_decode_row_in(
     on: pool,
     using: decoder,
   )
+}
+
+pub fn one_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: RowDecoder(a),
+) -> Result(a, Error) {
+  run_decode_row_in(query, within: scope, using: decoder)
 }
 
 pub fn decode_rows(
@@ -963,6 +1035,14 @@ pub fn run_decode_rows(
   }
 }
 
+pub fn all(
+  query: Query,
+  on pool: Pool,
+  using decoder: RowDecoder(a),
+) -> Result(List(a), Error) {
+  run_decode_rows(query, on: pool, using: decoder)
+}
+
 pub fn run_decode_rows_in(
   query: Query,
   within scope: Scope,
@@ -974,6 +1054,14 @@ pub fn run_decode_rows_in(
     on: pool,
     using: decoder,
   )
+}
+
+pub fn all_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: RowDecoder(a),
+) -> Result(List(a), Error) {
+  run_decode_rows_in(query, within: scope, using: decoder)
 }
 
 pub fn run_scalar_int(query: Query, on pool: Pool) -> Result(Int, Error) {

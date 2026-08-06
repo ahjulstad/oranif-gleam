@@ -63,18 +63,18 @@ let insert_user =
 	|> oranif.bind_bool(True)
 	|> oranif.as_proxy_user("TP_WRITER_1")
 
-let _ = oranif.run_affected(insert_user, on: pool)
+let _ = oranif.exec(insert_user, on: pool)
 
 let count_users =
 	oranif.scalar_query("select count(*) from app_users")
 	|> oranif.as_proxy_user("TP_READER_1")
 
-let total = oranif.run_scalar_int(count_users, on: pool)
+let total = oranif.scalar_as_type(count_users, on: pool, using: oranif.int_decoder())
 
 let latest_user =
 	oranif.row_query("select id, display_name from app_users where id = ?")
 	|> oranif.bind_int(42)
-	|> oranif.run_decode_row(
+	|> oranif.one(
 		on: pool,
 		using: oranif.pair_decoder(
 			first: oranif.int_decoder(),
@@ -85,18 +85,18 @@ let latest_user =
 let active_ids =
 	oranif.rows_query("select id from app_users where active = ? order by id")
 	|> oranif.bind_bool(True)
-	|> oranif.run_decode_rows(on: pool, using: oranif.first_int_decoder())
+	|> oranif.all(on: pool, using: oranif.first_int_decoder())
 
 let reader = oranif.scope_as(pool, "TP_READER_1")
 
 let total =
 	oranif.scalar_query("select count(*) from app_users")
-	|> oranif.run_scalar_int_in(within: reader)
+	|> oranif.scalar_as_type_in(within: reader, using: oranif.int_decoder())
 
 let maybe_user =
 	oranif.row_query("select id, display_name from app_users where id = ?")
 	|> oranif.bind_int(99999)
-	|> oranif.run_maybe_decode_row(
+	|> oranif.maybe_one(
 		on: pool,
 		using: oranif.pair_decoder(
 			first: oranif.int_decoder(),
