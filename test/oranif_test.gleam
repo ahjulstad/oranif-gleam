@@ -119,6 +119,17 @@ pub fn classify_db_error_maps_pool_timeout_test() {
   }
 }
 
+pub fn classify_db_error_maps_session_init_failure_test() {
+  case
+    oranif.classify_db_error(
+      "{error,{session_init_failed,{execute_failed,some_reason}}}",
+    )
+  {
+    oranif.SessionInitError(_) -> Nil
+    _ -> panic as "expected SessionInitError"
+  }
+}
+
 pub fn classify_db_error_falls_back_to_db_error_test() {
   case oranif.classify_db_error("some unexpected backend failure") {
     oranif.DbError(_) -> Nil
@@ -287,8 +298,11 @@ pub fn session_init_builds_tag_and_sql_from_option_test() {
         let SessionOption(_tag, module) = option
         [
           oranif.SetClientIdentifier("tenant:acme"),
+          oranif.SetClientInfo("app:reports"),
           oranif.SetModule(module:, action: "read"),
-          oranif.Exec("alter session set nls_date_format = 'YYYY-MM-DD'"),
+          oranif.SetAction("FETCH"),
+          oranif.SetNlsDateFormat("YYYY-MM-DD"),
+          oranif.Exec("begin null; end;"),
         ]
       },
     )
@@ -298,8 +312,11 @@ pub fn session_init_builds_tag_and_sql_from_option_test() {
   assert setup_sql(SessionOption("tenant=acme", "REPORTS"))
     == [
       "begin dbms_session.set_identifier('tenant:acme'); end;",
+      "begin dbms_application_info.set_client_info('app:reports'); end;",
       "begin dbms_application_info.set_module('REPORTS', 'read'); end;",
+      "begin dbms_application_info.set_action('FETCH'); end;",
       "alter session set nls_date_format = 'YYYY-MM-DD'",
+      "begin null; end;",
     ]
 }
 
@@ -308,7 +325,10 @@ pub fn session_init_escapes_quotes_in_generated_sql_test() {
     oranif.session_init(fn(_option) { "tenant=acme" }, fn(_option) {
       [
         oranif.SetClientIdentifier("o'hara"),
+        oranif.SetClientInfo("team'o"),
         oranif.SetModule("m'1", "a'2"),
+        oranif.SetAction("a'3"),
+        oranif.SetNlsDateFormat("YY'MM"),
       ]
     })
   let oranif.SessionInit(_tag_of, setup_sql) = init
@@ -316,7 +336,35 @@ pub fn session_init_escapes_quotes_in_generated_sql_test() {
   assert setup_sql(Nil)
     == [
       "begin dbms_session.set_identifier('o''hara'); end;",
+      "begin dbms_application_info.set_client_info('team''o'); end;",
       "begin dbms_application_info.set_module('m''1', 'a''2'); end;",
+      "begin dbms_application_info.set_action('a''3'); end;",
+      "alter session set nls_date_format = 'YY''MM'",
+    ]
+}
+
+pub fn session_init_sql_accepts_raw_sql_builder_test() {
+  let init =
+    oranif.session_init_sql(
+      fn(option) {
+        let SessionOption(tag, _module) = option
+        "raw:" <> tag
+      },
+      fn(option) {
+        let SessionOption(tag, _module) = option
+        [
+          "begin dbms_session.set_identifier('raw:" <> tag <> "'); end;",
+          "begin null; end;",
+        ]
+      },
+    )
+  let oranif.SessionInit(tag_of, setup_sql) = init
+
+  assert tag_of(SessionOption("a", "x")) == "raw:a"
+  assert setup_sql(SessionOption("a", "x"))
+    == [
+      "begin dbms_session.set_identifier('raw:a'); end;",
+      "begin null; end;",
     ]
 }
 

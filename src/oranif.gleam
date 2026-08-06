@@ -38,26 +38,35 @@ pub fn error_message(error: Error) -> String {
 
 pub fn classify_db_error(message: String) -> Error {
   let normalized = string.uppercase(message)
-  case string.contains(does: normalized, contain: "ORA-00942") {
-    True -> MissingTable(message)
+  case string.contains(does: normalized, contain: "SESSION_INIT_FAILED") {
+    True -> SessionInitError(message)
     False ->
-      case string.contains(does: normalized, contain: "ORA-00001") {
-        True -> ConstraintViolation(message)
+      case string.contains(does: normalized, contain: "ORA-00942") {
+        True -> MissingTable(message)
         False ->
-          case string.contains(does: normalized, contain: "ORA-01017") {
-            True -> AuthenticationError(message)
+          case string.contains(does: normalized, contain: "ORA-00001") {
+            True -> ConstraintViolation(message)
             False ->
-              case string.contains(does: normalized, contain: "ORA-01031") {
-                True -> PermissionDenied(message)
+              case string.contains(does: normalized, contain: "ORA-01017") {
+                True -> AuthenticationError(message)
                 False ->
-                  case string.contains(does: normalized, contain: "DPI-1080") {
-                    True -> PoolTimeout(message)
+                  case string.contains(does: normalized, contain: "ORA-01031") {
+                    True -> PermissionDenied(message)
                     False ->
                       case
-                        string.contains(does: normalized, contain: "ORA-24418")
+                        string.contains(does: normalized, contain: "DPI-1080")
                       {
-                        True -> PoolExhausted(message)
-                        False -> DbError(message)
+                        True -> PoolTimeout(message)
+                        False ->
+                          case
+                            string.contains(
+                              does: normalized,
+                              contain: "ORA-24418",
+                            )
+                          {
+                            True -> PoolExhausted(message)
+                            False -> DbError(message)
+                          }
                       }
                   }
               }
@@ -136,7 +145,10 @@ pub type SessionInit(option) {
 
 pub type SessionAction {
   SetClientIdentifier(value: String)
+  SetClientInfo(value: String)
   SetModule(module: String, action: String)
+  SetAction(action: String)
+  SetNlsDateFormat(value: String)
   Exec(sql: String)
 }
 
@@ -308,9 +320,16 @@ pub fn session_init(
   tag_of: fn(option) -> String,
   setup_sql: fn(option) -> List(SessionAction),
 ) -> SessionInit(option) {
-  SessionInit(tag_of:, setup_sql: fn(option) {
+  session_init_sql(tag_of, fn(option) {
     setup_sql(option) |> list.map(render_session_action)
   })
+}
+
+pub fn session_init_sql(
+  tag_of: fn(option) -> String,
+  setup_sql: fn(option) -> List(String),
+) -> SessionInit(option) {
+  SessionInit(tag_of:, setup_sql:)
 }
 
 pub fn prepare_pool(
@@ -1605,12 +1624,22 @@ fn render_session_action(action: SessionAction) -> String {
   case action {
     SetClientIdentifier(value) ->
       "begin dbms_session.set_identifier('" <> sql_escape(value) <> "'); end;"
+    SetClientInfo(value) ->
+      "begin dbms_application_info.set_client_info('"
+      <> sql_escape(value)
+      <> "'); end;"
     SetModule(module, step) ->
       "begin dbms_application_info.set_module('"
       <> sql_escape(module)
       <> "', '"
       <> sql_escape(step)
       <> "'); end;"
+    SetAction(step) ->
+      "begin dbms_application_info.set_action('"
+      <> sql_escape(step)
+      <> "'); end;"
+    SetNlsDateFormat(value) ->
+      "alter session set nls_date_format = '" <> sql_escape(value) <> "'"
     Exec(sql) -> sql
   }
 }

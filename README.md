@@ -149,7 +149,7 @@ gleam test
 - `run_rows` and `run_decode_rows` fetch and decode whole result sets.
 - `run_maybe_scalar`, `run_maybe_row`, and `run_maybe_decode_row` turn `NotFound` lookups into `Option` values.
 - `scope_as` plus `run_*_in` let you reuse pool and proxy identity context across many queries.
-- `session_init`, `prepare_pool`, `scope_with`, and `scope_as_with` let you define pool-level session setup once and pass typed per-checkout options.
+- `session_init`, `session_init_sql`, `prepare_pool`, `scope_with`, and `scope_as_with` let you define pool-level session setup once and pass typed per-checkout options.
 - `decode2` and `decode3` build row decoders directly into your own record or value constructors.
 - `map_scalar_decoder`, `map_row_decoder`, `pair_decoder`, and `triple_decoder` support reusable record-style decoders.
 - `to_sql` renders a query and validates placeholder/parameter counts.
@@ -173,8 +173,10 @@ let initializer =
 			let SessionOption(tenant, role) = option
 			[
 				oranif.SetClientIdentifier("tenant:" <> tenant),
+				oranif.SetClientInfo("service:proxy-wrapper"),
 				oranif.SetModule("ORANIF", role),
-				oranif.Exec("alter session set nls_date_format = 'YYYY-MM-DD'"),
+				oranif.SetAction("QUERY"),
+				oranif.SetNlsDateFormat("YYYY-MM-DD"),
 			]
 		},
 	)
@@ -187,6 +189,8 @@ let _ =
 	oranif.query("select count(*) from test_data")
 	|> oranif.run_scalar_int_in(within: scoped)
 ```
+
+If you already build session SQL yourself, use `session_init_sql` directly with `fn(option) -> List(String)`.
 
 Tagging behavior:
 
@@ -205,6 +209,7 @@ Common backend failures are mapped into semantic wrapper errors where possible:
 - `ORA-01031` -> `PermissionDenied`
 - `DPI-1080` -> `PoolTimeout`
 - `ORA-24418` -> `PoolExhausted`
+- `session_init_failed` bridge errors -> `SessionInitError`
 
 ## CI
 
