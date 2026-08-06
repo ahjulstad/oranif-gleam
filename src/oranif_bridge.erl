@@ -8,10 +8,14 @@
     pool_create/9,
     pool_close/1,
     pool_exec_sql/4,
+    pool_exec_sql_with_session/6,
     pool_exec_sql_metric/4,
     pool_probe_sql/4,
+    pool_probe_sql_with_session/6,
     pool_probe_row/4,
+    pool_probe_row_with_session/6,
     pool_probe_rows/4,
+    pool_probe_rows_with_session/6,
     pool_probe_sql_metric/4,
     pool_probe_burst_metric/5,
     pool_probe_burst_metric_hold/6,
@@ -119,13 +123,32 @@ pool_exec_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
          is_binary(Sql) ->
     case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
         execute_no_fetch(Conn, Sql)
-    end) of
+    end, undefined, []) of
         {ok, Result, _BusySample} ->
             Result;
         {error, _} = Error ->
             Error
     end;
 pool_exec_sql(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+    {error, {invalid_pool_handle, Other}}.
+
+pool_exec_sql_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+    when is_reference(Context),
+         is_reference(Pool),
+         is_binary(AcquireUser),
+         is_binary(AcquirePassword),
+         is_binary(Sql),
+         is_binary(RequestedTag),
+         is_list(SetupSql) ->
+    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+        execute_no_fetch(Conn, Sql)
+    end, RequestedTag, SetupSql) of
+        {ok, Result, _BusySample} ->
+            Result;
+        {error, _} = Error ->
+            Error
+    end;
+pool_exec_sql_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_exec_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -136,7 +159,7 @@ pool_exec_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
          is_binary(Sql) ->
     case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
         execute_no_fetch(Conn, Sql)
-    end) of
+    end, undefined, []) of
         {ok, {ok, _Value}, BusySample} ->
             {ok, BusySample};
         {ok, {error, _} = Error, _BusySample} ->
@@ -155,13 +178,32 @@ pool_probe_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
          is_binary(Sql) ->
     case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
         execute_and_fetch_first(Conn, Sql)
-    end) of
+    end, undefined, []) of
         {ok, Result, _BusySample} ->
             Result;
         {error, _} = Error ->
             Error
     end;
 pool_probe_sql(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+    {error, {invalid_pool_handle, Other}}.
+
+pool_probe_sql_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+    when is_reference(Context),
+         is_reference(Pool),
+         is_binary(AcquireUser),
+         is_binary(AcquirePassword),
+         is_binary(Sql),
+         is_binary(RequestedTag),
+         is_list(SetupSql) ->
+    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+        execute_and_fetch_first(Conn, Sql)
+    end, RequestedTag, SetupSql) of
+        {ok, Result, _BusySample} ->
+            Result;
+        {error, _} = Error ->
+            Error
+    end;
+pool_probe_sql_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_probe_row({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -172,13 +214,32 @@ pool_probe_row({Context, Pool}, AcquireUser, AcquirePassword, Sql)
          is_binary(Sql) ->
     case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
         execute_and_fetch_row(Conn, Sql)
-    end) of
+    end, undefined, []) of
         {ok, Result, _BusySample} ->
             Result;
         {error, _} = Error ->
             Error
     end;
 pool_probe_row(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+    {error, {invalid_pool_handle, Other}}.
+
+pool_probe_row_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+    when is_reference(Context),
+         is_reference(Pool),
+         is_binary(AcquireUser),
+         is_binary(AcquirePassword),
+         is_binary(Sql),
+         is_binary(RequestedTag),
+         is_list(SetupSql) ->
+    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+        execute_and_fetch_row(Conn, Sql)
+    end, RequestedTag, SetupSql) of
+        {ok, Result, _BusySample} ->
+            Result;
+        {error, _} = Error ->
+            Error
+    end;
+pool_probe_row_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_probe_rows({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -189,13 +250,32 @@ pool_probe_rows({Context, Pool}, AcquireUser, AcquirePassword, Sql)
          is_binary(Sql) ->
     case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
         execute_and_fetch_rows(Conn, Sql)
-    end) of
+    end, undefined, []) of
         {ok, Result, _BusySample} ->
             Result;
         {error, _} = Error ->
             Error
     end;
 pool_probe_rows(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+    {error, {invalid_pool_handle, Other}}.
+
+pool_probe_rows_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+    when is_reference(Context),
+         is_reference(Pool),
+         is_binary(AcquireUser),
+         is_binary(AcquirePassword),
+         is_binary(Sql),
+         is_binary(RequestedTag),
+         is_list(SetupSql) ->
+    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+        execute_and_fetch_rows(Conn, Sql)
+    end, RequestedTag, SetupSql) of
+        {ok, Result, _BusySample} ->
+            Result;
+        {error, _} = Error ->
+            Error
+    end;
+pool_probe_rows_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_probe_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -206,7 +286,7 @@ pool_probe_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
          is_binary(Sql) ->
     case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
         execute_and_fetch_first(Conn, Sql)
-    end) of
+    end, undefined, []) of
         {ok, {ok, Value}, BusySample} ->
             {ok, {Value, BusySample}};
         {ok, {error, _} = Error, _BusySample} ->
@@ -495,69 +575,154 @@ safe_conn_close(Conn, _Tag) ->
 safe_context_destroy(Context) ->
     catch dpi:context_destroy(Context).
 
-with_pool_connection(Pool, AcquireUser, AcquirePassword, Fun) ->
+with_pool_connection(Pool, AcquireUser, AcquirePassword, Fun, RequestedTagInput, SetupSqlInput) ->
     Role = role_from_user(AcquireUser),
-    RequestedTag = role_tag(Role),
+    RoleTag = role_tag(Role),
+    CustomTag = normalize_requested_tag(RequestedTagInput),
+    RequestedTag = compose_tags(RoleTag, CustomTag),
     ExpectedClientId = role_client_identifier(Role),
     ConnParams = role_conn_params(RequestedTag),
-    try
-        case dpi:pool_acquireConnection(Pool, AcquireUser, AcquirePassword, ConnParams) of
-            Conn when is_reference(Conn) ->
-                BusySample = safe_pool_busy(Pool),
-                HasInitialized = session_has_client_id(Conn, ExpectedClientId),
-                Event = case HasInitialized of
-                    true -> hit;
-                    false -> init
-                end,
-                _ = maybe_initialize_role_session(Conn, Role, HasInitialized),
-                try
-                    case Fun(Conn) of
-                        Result -> {ok, Result, BusySample}
-                    end
-                after
-                    _ = safe_conn_close(Conn, RequestedTag),
-                    _ = record_affinity_event(Role, Event)
-                end;
-            #{conn := Conn, out_tag_found := TagFound, out_tag := OutTag} when is_reference(Conn) ->
-                BusySample = safe_pool_busy(Pool),
-                HasMatchingTag = role_tag_match(TagFound, RequestedTag, OutTag),
-                HasInitialized = session_has_client_id(Conn, ExpectedClientId),
-                Event = case HasMatchingTag orelse HasInitialized of
-                    true -> hit;
-                    false -> init
-                end,
-                _ = maybe_initialize_role_session(Conn, Role, HasInitialized),
-                try
-                    case Fun(Conn) of
-                        Result -> {ok, Result, BusySample}
-                    end
-                after
-                    _ = safe_conn_close(Conn, RequestedTag),
-                    _ = record_affinity_event(Role, Event)
-                end;
-            #{conn := Conn} when is_reference(Conn) ->
-                BusySample = safe_pool_busy(Pool),
-                HasInitialized = session_has_client_id(Conn, ExpectedClientId),
-                Event = case HasInitialized of
-                    true -> hit;
-                    false -> init
-                end,
-                _ = maybe_initialize_role_session(Conn, Role, HasInitialized),
-                try
-                    case Fun(Conn) of
-                        Result -> {ok, Result, BusySample}
-                    end
-                after
-                    _ = safe_conn_close(Conn, RequestedTag),
-                    _ = record_affinity_event(Role, Event)
-                end;
-            Other ->
-                {error, {pool_acquire_failed, Other}}
-        end
-    catch
-        Class:Reason ->
-            {error, {pool_acquire_exception, {Class, Reason}}}
+    SetupSql = normalize_setup_sql(SetupSqlInput),
+    case valid_binary_list(SetupSql) of
+        false ->
+            {error, {invalid_setup_sql, SetupSqlInput}};
+        true ->
+            try
+                case dpi:pool_acquireConnection(Pool, AcquireUser, AcquirePassword, ConnParams) of
+                    Conn when is_reference(Conn) ->
+                        run_with_checked_connection(
+                            Pool,
+                            Conn,
+                            false,
+                            <<>>,
+                            Fun,
+                            Role,
+                            ExpectedClientId,
+                            RequestedTag,
+                            SetupSql
+                        );
+                    #{conn := Conn, out_tag_found := TagFound, out_tag := OutTag} when is_reference(Conn) ->
+                        run_with_checked_connection(
+                            Pool,
+                            Conn,
+                            TagFound,
+                            OutTag,
+                            Fun,
+                            Role,
+                            ExpectedClientId,
+                            RequestedTag,
+                            SetupSql
+                        );
+                    #{conn := Conn} when is_reference(Conn) ->
+                        run_with_checked_connection(
+                            Pool,
+                            Conn,
+                            false,
+                            <<>>,
+                            Fun,
+                            Role,
+                            ExpectedClientId,
+                            RequestedTag,
+                            SetupSql
+                        );
+                    Other ->
+                        {error, {pool_acquire_failed, Other}}
+                end
+            catch
+                Class:Reason ->
+                    {error, {pool_acquire_exception, {Class, Reason}}}
+            end
     end.
+
+run_with_checked_connection(
+    Pool,
+    Conn,
+    TagFound,
+    OutTag,
+    Fun,
+    Role,
+    ExpectedClientId,
+    RequestedTag,
+    SetupSql
+) ->
+    BusySample = safe_pool_busy(Pool),
+    HasMatchingTag = role_tag_match(TagFound, RequestedTag, OutTag),
+    HasRoleInitialized = session_has_client_id(Conn, ExpectedClientId),
+    NeedsRoleInit = role_needs_init(Role, HasRoleInitialized),
+    NeedsCustomInit = custom_needs_init(RequestedTag, SetupSql, HasMatchingTag),
+    Event = case NeedsRoleInit orelse NeedsCustomInit of
+        true -> init;
+        false -> hit
+    end,
+    case maybe_initialize_role_session(Conn, Role, not NeedsRoleInit) of
+        ok ->
+            case maybe_initialize_custom_session(Conn, NeedsCustomInit, SetupSql) of
+                ok ->
+                    try
+                        case Fun(Conn) of
+                            Result -> {ok, Result, BusySample}
+                        end
+                    after
+                        _ = safe_conn_close(Conn, RequestedTag),
+                        _ = record_affinity_event(Role, Event)
+                    end;
+                {error, Reason} ->
+                    _ = safe_conn_close(Conn, <<>>),
+                    {error, {session_init_failed, Reason}}
+            end;
+        {error, Reason} ->
+            _ = safe_conn_close(Conn, <<>>),
+            {error, {session_init_failed, Reason}}
+    end.
+
+normalize_requested_tag(Tag) when is_binary(Tag) ->
+    Tag;
+normalize_requested_tag(_Tag) ->
+    <<>>.
+
+normalize_setup_sql(SetupSql) when is_list(SetupSql) ->
+    SetupSql;
+normalize_setup_sql(_SetupSql) ->
+    [].
+
+compose_tags(<<>>, <<>>) ->
+    <<>>;
+compose_tags(Left, <<>>) when is_binary(Left) ->
+    Left;
+compose_tags(<<>>, Right) when is_binary(Right) ->
+    Right;
+compose_tags(Left, Right) when is_binary(Left), is_binary(Right) ->
+    <<Left/binary, "|", Right/binary>>.
+
+role_needs_init(writer, HasRoleInitialized) ->
+    not HasRoleInitialized;
+role_needs_init(reader, HasRoleInitialized) ->
+    not HasRoleInitialized;
+role_needs_init(_Role, _HasRoleInitialized) ->
+    false.
+
+custom_needs_init(<<>>, _SetupSql, _HasMatchingTag) ->
+    false;
+custom_needs_init(_RequestedTag, SetupSql, HasMatchingTag) ->
+    case SetupSql of
+        [] -> false;
+        _ -> not HasMatchingTag
+    end.
+
+maybe_initialize_custom_session(_Conn, false, _SetupSql) ->
+    ok;
+maybe_initialize_custom_session(Conn, true, SetupSql) ->
+    run_setup_sql(Conn, SetupSql).
+
+run_setup_sql(_Conn, []) ->
+    ok;
+run_setup_sql(Conn, [Sql | Rest]) when is_binary(Sql) ->
+    case execute_no_fetch_no_commit_strict(Conn, Sql) of
+        ok -> run_setup_sql(Conn, Rest);
+        {error, _} = Error -> Error
+    end;
+run_setup_sql(_Conn, [Other | _Rest]) ->
+    {error, {invalid_setup_statement, Other}}.
 
 safe_pool_busy(Pool) ->
     try
@@ -583,7 +748,7 @@ do_pool_probe_burst_metric(Pool, AcquireUsers, AcquirePassword, Sql, Count, Hold
                     Error ->
                         Error
                 end
-            end) of
+            end, undefined, []) of
                 {ok, {ok, _Value}, BusySample} -> {ok, BusySample};
                 {ok, {error, Reason}, _BusySample} -> {error, Reason};
                 {error, Reason} -> {error, Reason}
@@ -762,6 +927,20 @@ execute_no_fetch_no_commit(Conn, Sql) ->
             end;
         _ ->
             ok
+    end.
+
+execute_no_fetch_no_commit_strict(Conn, Sql) ->
+    case dpi:conn_prepareStmt(Conn, false, Sql, <<>>) of
+        Stmt when is_reference(Stmt) ->
+            Result = catch dpi:stmt_execute(Stmt, []),
+            _ = catch dpi:stmt_close(Stmt, <<>>),
+            case Result of
+                Exec when is_integer(Exec), Exec >= 0 -> ok;
+                {'EXIT', Reason} -> {error, {execute_failed, Reason}};
+                Other -> {error, {unexpected_exec_result, Other}}
+            end;
+        Error ->
+            {error, {prepare_failed, Error}}
     end.
 
 init_pool_metrics_table() ->

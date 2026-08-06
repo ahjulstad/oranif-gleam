@@ -52,7 +52,9 @@ pub fn main() -> Nil {
       }
 
       case
-        oranif.scalar_query("select count(*) from TP_BACKEND_APP.gleam_wrapper_smoke")
+        oranif.scalar_query(
+          "select count(*) from TP_BACKEND_APP.gleam_wrapper_smoke",
+        )
         |> oranif.scalar_as_type_in(
           within: reader_scope,
           using: oranif.int_decoder(),

@@ -152,9 +152,51 @@ gleam test
 - `run_rows` and `run_decode_rows` fetch and decode whole result sets.
 - `run_maybe_scalar`, `run_maybe_row`, and `run_maybe_decode_row` turn `NotFound` lookups into `Option` values.
 - `scope_as` plus `run_*_in` let you reuse pool and proxy identity context across many queries.
+- `session_init`, `prepare_pool`, `scope_with`, and `scope_as_with` let you define pool-level session setup once and pass typed per-checkout options.
 - `decode2` and `decode3` build row decoders directly into your own record or value constructors.
 - `map_scalar_decoder`, `map_row_decoder`, `pair_decoder`, and `triple_decoder` support reusable record-style decoders.
 - `to_sql` renders a query and validates placeholder/parameter counts.
+
+### Parameterized session initialization
+
+You can define a typed option model for session setup, map each option to a stable tag, and provide setup actions to run when a checked-out session does not already match that tag.
+
+```gleam
+type SessionOption {
+	SessionOption(tenant: String, role: String)
+}
+
+let initializer =
+	oranif.session_init(
+		fn(option) {
+			let SessionOption(tenant, role) = option
+			"tenant=" <> tenant <> "|role=" <> role
+		},
+		fn(option) {
+			let SessionOption(tenant, role) = option
+			[
+				oranif.SetClientIdentifier("tenant:" <> tenant),
+				oranif.SetModule("ORANIF", role),
+				oranif.Exec("alter session set nls_date_format = 'YYYY-MM-DD'"),
+			]
+		},
+	)
+
+let prepared = oranif.prepare_pool(pool, with: initializer)
+let scoped =
+	oranif.scope_with(prepared, SessionOption(tenant: "acme", role: "reader"))
+
+let _ =
+	oranif.query("select count(*) from test_data")
+	|> oranif.run_scalar_int_in(within: scoped)
+```
+
+Tagging behavior:
+
+- Acquire requests a composed tag that includes existing built-in role affinity plus your option-derived tag.
+- If the acquired session already matches that effective tag, setup actions are skipped.
+- If not, setup actions run and the session is closed with the effective tag.
+- If setup fails, the session is closed untagged and the checkout returns an error.
 
 ### Error mapping
 

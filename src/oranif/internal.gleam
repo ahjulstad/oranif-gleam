@@ -49,12 +49,32 @@ fn pool_exec_sql_ffi(
   sql: String,
 ) -> Result(String, dynamic.Dynamic)
 
+@external(erlang, "oranif_bridge", "pool_exec_sql_with_session")
+fn pool_exec_sql_with_session_ffi(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
+) -> Result(String, dynamic.Dynamic)
+
 @external(erlang, "oranif_bridge", "pool_probe_sql")
 fn pool_probe_sql_ffi(
   pool: dynamic.Dynamic,
   user: String,
   password: String,
   sql: String,
+) -> Result(dynamic.Dynamic, dynamic.Dynamic)
+
+@external(erlang, "oranif_bridge", "pool_probe_sql_with_session")
+fn pool_probe_sql_with_session_ffi(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
 ) -> Result(dynamic.Dynamic, dynamic.Dynamic)
 
 @external(erlang, "oranif_bridge", "pool_probe_row")
@@ -65,12 +85,32 @@ fn pool_probe_row_ffi(
   sql: String,
 ) -> Result(List(dynamic.Dynamic), dynamic.Dynamic)
 
+@external(erlang, "oranif_bridge", "pool_probe_row_with_session")
+fn pool_probe_row_with_session_ffi(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
+) -> Result(List(dynamic.Dynamic), dynamic.Dynamic)
+
 @external(erlang, "oranif_bridge", "pool_probe_rows")
 fn pool_probe_rows_ffi(
   pool: dynamic.Dynamic,
   user: String,
   password: String,
   sql: String,
+) -> Result(List(List(dynamic.Dynamic)), dynamic.Dynamic)
+
+@external(erlang, "oranif_bridge", "pool_probe_rows_with_session")
+fn pool_probe_rows_with_session_ffi(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
 ) -> Result(List(List(dynamic.Dynamic)), dynamic.Dynamic)
 
 @external(erlang, "oranif_bridge", "pool_stats")
@@ -178,6 +218,29 @@ pub fn pool_exec_sql(
   }
 }
 
+pub fn pool_exec_sql_with_session(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
+) -> Result(Nil, String) {
+  case
+    pool_exec_sql_with_session_ffi(
+      pool,
+      user,
+      password,
+      sql,
+      requested_tag,
+      setup_sql,
+    )
+  {
+    Ok(_) -> Ok(Nil)
+    Error(reason) -> Error(string.inspect(reason))
+  }
+}
+
 pub fn pool_probe_sql(
   pool: dynamic.Dynamic,
   user: String,
@@ -185,6 +248,29 @@ pub fn pool_probe_sql(
   sql: String,
 ) -> Result(String, String) {
   case pool_probe_sql_ffi(pool, user, password, sql) {
+    Ok(value) -> to_text(value)
+    Error(reason) -> Error(string.inspect(reason))
+  }
+}
+
+pub fn pool_probe_sql_with_session(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
+) -> Result(String, String) {
+  case
+    pool_probe_sql_with_session_ffi(
+      pool,
+      user,
+      password,
+      sql,
+      requested_tag,
+      setup_sql,
+    )
+  {
     Ok(value) -> to_text(value)
     Error(reason) -> Error(string.inspect(reason))
   }
@@ -202,6 +288,29 @@ pub fn pool_probe_row(
   }
 }
 
+pub fn pool_probe_row_with_session(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
+) -> Result(List(String), String) {
+  case
+    pool_probe_row_with_session_ffi(
+      pool,
+      user,
+      password,
+      sql,
+      requested_tag,
+      setup_sql,
+    )
+  {
+    Ok(values) -> values |> list.map(to_text) |> collect_results([])
+    Error(reason) -> Error(string.inspect(reason))
+  }
+}
+
 pub fn pool_probe_rows(
   pool: dynamic.Dynamic,
   user: String,
@@ -209,6 +318,29 @@ pub fn pool_probe_rows(
   sql: String,
 ) -> Result(List(List(String)), String) {
   case pool_probe_rows_ffi(pool, user, password, sql) {
+    Ok(rows) -> rows |> list.map(normalize_row) |> collect_row_results([])
+    Error(reason) -> Error(string.inspect(reason))
+  }
+}
+
+pub fn pool_probe_rows_with_session(
+  pool: dynamic.Dynamic,
+  user: String,
+  password: String,
+  sql: String,
+  requested_tag: String,
+  setup_sql: List(String),
+) -> Result(List(List(String)), String) {
+  case
+    pool_probe_rows_with_session_ffi(
+      pool,
+      user,
+      password,
+      sql,
+      requested_tag,
+      setup_sql,
+    )
+  {
     Ok(rows) -> rows |> list.map(normalize_row) |> collect_row_results([])
     Error(reason) -> Error(string.inspect(reason))
   }

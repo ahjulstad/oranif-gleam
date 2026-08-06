@@ -6,6 +6,10 @@ type Person {
   Person(id: Int, name: String)
 }
 
+type SessionOption {
+  SessionOption(tag: String, module: String)
+}
+
 pub fn to_sql_renders_positional_params_test() {
   let built =
     oranif.query("insert into t (id, name, active) values (?, ?, ?)")
@@ -270,6 +274,50 @@ pub fn decode3_builds_custom_value_test() {
 
   assert oranif.decode_row(["7", "Ada", "true"], using: decoder)
     == Ok("Ada:7:true")
+}
+
+pub fn session_init_builds_tag_and_sql_from_option_test() {
+  let init =
+    oranif.session_init(
+      fn(option) {
+        let SessionOption(tag, _module) = option
+        tag
+      },
+      fn(option) {
+        let SessionOption(_tag, module) = option
+        [
+          oranif.SetClientIdentifier("tenant:acme"),
+          oranif.SetModule(module:, action: "read"),
+          oranif.Exec("alter session set nls_date_format = 'YYYY-MM-DD'"),
+        ]
+      },
+    )
+  let oranif.SessionInit(tag_of, setup_sql) = init
+
+  assert tag_of(SessionOption("tenant=acme", "REPORTS")) == "tenant=acme"
+  assert setup_sql(SessionOption("tenant=acme", "REPORTS"))
+    == [
+      "begin dbms_session.set_identifier('tenant:acme'); end;",
+      "begin dbms_application_info.set_module('REPORTS', 'read'); end;",
+      "alter session set nls_date_format = 'YYYY-MM-DD'",
+    ]
+}
+
+pub fn session_init_escapes_quotes_in_generated_sql_test() {
+  let init =
+    oranif.session_init(fn(_option) { "tenant=acme" }, fn(_option) {
+      [
+        oranif.SetClientIdentifier("o'hara"),
+        oranif.SetModule("m'1", "a'2"),
+      ]
+    })
+  let oranif.SessionInit(_tag_of, setup_sql) = init
+
+  assert setup_sql(Nil)
+    == [
+      "begin dbms_session.set_identifier('o''hara'); end;",
+      "begin dbms_application_info.set_module('m''1', 'a''2'); end;",
+    ]
 }
 
 fn string_from_bool(value: Bool) -> String {

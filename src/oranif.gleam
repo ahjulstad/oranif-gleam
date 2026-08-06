@@ -15,6 +15,7 @@ pub type Error {
   PoolTimeout(message: String)
   PoolExhausted(message: String)
   QueryBuildError(message: String)
+  SessionInitError(message: String)
   DecodeError(message: String)
   NotFound
 }
@@ -29,6 +30,7 @@ pub fn error_message(error: Error) -> String {
     PoolTimeout(message) -> message
     PoolExhausted(message) -> message
     QueryBuildError(message) -> message
+    SessionInitError(message) -> message
     DecodeError(message) -> message
     NotFound -> "query returned no rows"
   }
@@ -89,7 +91,11 @@ pub opaque type Pool {
 }
 
 pub opaque type Scope {
-  Scope(pool: Pool, identity: Identity)
+  Scope(pool: Pool, identity: Identity, session_profile: Option(SessionProfile))
+}
+
+pub opaque type PreparedPool(option) {
+  PreparedPool(pool: Pool, session_init: SessionInit(option))
 }
 
 pub opaque type Trace {
@@ -119,6 +125,23 @@ pub type TraceSample {
     writer_hit_total: Int,
     reader_hit_total: Int,
   )
+}
+
+pub type SessionInit(option) {
+  SessionInit(
+    tag_of: fn(option) -> String,
+    setup_sql: fn(option) -> List(String),
+  )
+}
+
+pub type SessionAction {
+  SetClientIdentifier(value: String)
+  SetModule(module: String, action: String)
+  Exec(sql: String)
+}
+
+type SessionProfile {
+  SessionProfile(requested_tag: String, setup_sql: List(String))
 }
 
 pub type Param {
@@ -274,11 +297,52 @@ pub fn as_proxy_user(query: Query, end_user: String) -> Query {
 }
 
 pub fn scope(pool: Pool) -> Scope {
-  Scope(pool:, identity: Direct)
+  Scope(pool:, identity: Direct, session_profile: None)
 }
 
 pub fn scope_as(pool: Pool, end_user: String) -> Scope {
-  Scope(pool:, identity: Proxy(end_user))
+  Scope(pool:, identity: Proxy(end_user), session_profile: None)
+}
+
+pub fn session_init(
+  tag_of: fn(option) -> String,
+  setup_sql: fn(option) -> List(SessionAction),
+) -> SessionInit(option) {
+  SessionInit(tag_of:, setup_sql: fn(option) {
+    setup_sql(option) |> list.map(render_session_action)
+  })
+}
+
+pub fn prepare_pool(
+  pool: Pool,
+  with session_initializer: SessionInit(option),
+) -> PreparedPool(option) {
+  PreparedPool(pool:, session_init: session_initializer)
+}
+
+pub fn scope_with(
+  prepared_pool: PreparedPool(option),
+  option: option,
+) -> Scope {
+  let PreparedPool(pool, session_initializer) = prepared_pool
+  Scope(
+    pool:,
+    identity: Direct,
+    session_profile: Some(build_session_profile(session_initializer, option)),
+  )
+}
+
+pub fn scope_as_with(
+  prepared_pool: PreparedPool(option),
+  end_user: String,
+  option: option,
+) -> Scope {
+  let PreparedPool(pool, session_initializer) = prepared_pool
+  Scope(
+    pool:,
+    identity: Proxy(end_user),
+    session_profile: Some(build_session_profile(session_initializer, option)),
+  )
 }
 
 pub fn returning_scalar(query: Query) -> Query {
@@ -606,34 +670,134 @@ pub fn stop(pool: Pool) -> Result(Nil, Error) {
 }
 
 pub fn execute(sql: String, on pool: Pool) -> Result(Nil, Error) {
+  execute_with_session_profile(sql, pool, None)
+}
+
+fn execute_with_session_profile(
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(Nil, Error) {
   let Pool(handle, base_user, base_password) = pool
-  case internal.pool_exec_sql(handle, base_user, base_password, sql) {
-    Ok(_) -> Ok(Nil)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_exec_sql(handle, base_user, base_password, sql) {
+        Ok(_) -> Ok(Nil)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_exec_sql_with_session(
+          handle,
+          base_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(_) -> Ok(Nil)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
 pub fn scalar(sql: String, on pool: Pool) -> Result(String, Error) {
+  scalar_with_session_profile(sql, pool, None)
+}
+
+fn scalar_with_session_profile(
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(String, Error) {
   let Pool(handle, base_user, base_password) = pool
-  case internal.pool_probe_sql(handle, base_user, base_password, sql) {
-    Ok(value) -> Ok(value)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_probe_sql(handle, base_user, base_password, sql) {
+        Ok(value) -> Ok(value)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_probe_sql_with_session(
+          handle,
+          base_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(value) -> Ok(value)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
 pub fn row(sql: String, on pool: Pool) -> Result(List(String), Error) {
+  row_with_session_profile(sql, pool, None)
+}
+
+fn row_with_session_profile(
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(List(String), Error) {
   let Pool(handle, base_user, base_password) = pool
-  case internal.pool_probe_row(handle, base_user, base_password, sql) {
-    Ok(values) -> Ok(values)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_probe_row(handle, base_user, base_password, sql) {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_probe_row_with_session(
+          handle,
+          base_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
 pub fn rows(sql: String, on pool: Pool) -> Result(List(List(String)), Error) {
+  rows_with_session_profile(sql, pool, None)
+}
+
+fn rows_with_session_profile(
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(List(List(String)), Error) {
   let Pool(handle, base_user, base_password) = pool
-  case internal.pool_probe_rows(handle, base_user, base_password, sql) {
-    Ok(values) -> Ok(values)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_probe_rows(handle, base_user, base_password, sql) {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_probe_rows_with_session(
+          handle,
+          base_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
@@ -645,53 +809,97 @@ pub fn execute_query(
 }
 
 pub fn run_in(query: Query, within scope: Scope) -> Result(QueryResult, Error) {
-  let Scope(pool, identity) = scope
-  run(apply_scope_identity(query, identity), on: pool)
+  let Scope(pool, identity, session_profile) = scope
+  run_with_session_profile(
+    apply_scope_identity(query, identity),
+    pool,
+    session_profile,
+  )
 }
 
 pub fn run(query: Query, on pool: Pool) -> Result(QueryResult, Error) {
+  run_with_session_profile(query, pool, None)
+}
+
+fn run_with_session_profile(
+  query: Query,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(QueryResult, Error) {
   let Query(sql, params, identity, expectation, _label) = query
   case render_sql(sql, params) {
     Error(reason) -> Error(reason)
     Ok(compiled_sql) ->
       case identity, expectation {
         Direct, ExpectAffected ->
-          case execute(compiled_sql, on: pool) {
+          case
+            execute_with_session_profile(compiled_sql, pool, session_profile)
+          {
             Ok(_) -> Ok(Affected)
             Error(reason) -> Error(reason)
           }
         Direct, ExpectScalar ->
-          case scalar(compiled_sql, on: pool) {
+          case
+            scalar_with_session_profile(compiled_sql, pool, session_profile)
+          {
             Ok(value) -> Ok(Scalar(value))
             Error(reason) -> Error(reason)
           }
         Direct, ExpectRow ->
-          case row(compiled_sql, on: pool) {
+          case row_with_session_profile(compiled_sql, pool, session_profile) {
             Ok(values) -> Ok(Row(values))
             Error(reason) -> Error(reason)
           }
         Direct, ExpectRows ->
-          case rows(compiled_sql, on: pool) {
+          case rows_with_session_profile(compiled_sql, pool, session_profile) {
             Ok(values) -> Ok(Rows(values))
             Error(reason) -> Error(reason)
           }
         Proxy(end_user), ExpectAffected ->
-          case execute_as(end_user, compiled_sql, on: pool) {
+          case
+            execute_as_with_session_profile(
+              end_user,
+              compiled_sql,
+              pool,
+              session_profile,
+            )
+          {
             Ok(_) -> Ok(Affected)
             Error(reason) -> Error(reason)
           }
         Proxy(end_user), ExpectScalar ->
-          case scalar_as(end_user, compiled_sql, on: pool) {
+          case
+            scalar_as_with_session_profile(
+              end_user,
+              compiled_sql,
+              pool,
+              session_profile,
+            )
+          {
             Ok(value) -> Ok(Scalar(value))
             Error(reason) -> Error(reason)
           }
         Proxy(end_user), ExpectRow ->
-          case row_as(end_user, compiled_sql, on: pool) {
+          case
+            row_as_with_session_profile(
+              end_user,
+              compiled_sql,
+              pool,
+              session_profile,
+            )
+          {
             Ok(values) -> Ok(Row(values))
             Error(reason) -> Error(reason)
           }
         Proxy(end_user), ExpectRows ->
-          case rows_as(end_user, compiled_sql, on: pool) {
+          case
+            rows_as_with_session_profile(
+              end_user,
+              compiled_sql,
+              pool,
+              session_profile,
+            )
+          {
             Ok(values) -> Ok(Rows(values))
             Error(reason) -> Error(reason)
           }
@@ -717,8 +925,13 @@ pub fn run_affected_in(
   query: Query,
   within scope: Scope,
 ) -> Result(Nil, Error) {
-  let Scope(pool, identity) = scope
-  run_affected(apply_scope_identity(query, identity), on: pool)
+  case run_in(expect_affected(query), within: scope) {
+    Ok(Affected) -> Ok(Nil)
+    Ok(Scalar(_)) -> Error(DecodeError("expected affected rows result"))
+    Ok(Row(_)) -> Error(DecodeError("expected affected rows result"))
+    Ok(Rows(_)) -> Error(DecodeError("expected affected rows result"))
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn exec_in(query: Query, within scope: Scope) -> Result(Nil, Error) {
@@ -750,16 +963,24 @@ pub fn run_maybe_scalar_in(
   query: Query,
   within scope: Scope,
 ) -> Result(Option(String), Error) {
-  let Scope(pool, identity) = scope
-  run_maybe_scalar(apply_scope_identity(query, identity), on: pool)
+  case run_scalar_in(query, within: scope) {
+    Ok(value) -> Ok(Some(value))
+    Error(NotFound) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn run_scalar_in(
   query: Query,
   within scope: Scope,
 ) -> Result(String, Error) {
-  let Scope(pool, identity) = scope
-  run_scalar(apply_scope_identity(query, identity), on: pool)
+  case run_in(expect_scalar(query), within: scope) {
+    Ok(Scalar(value)) -> Ok(value)
+    Ok(Affected) -> Error(DecodeError("expected scalar result"))
+    Ok(Row(_)) -> Error(DecodeError("expected scalar result"))
+    Ok(Rows(_)) -> Error(DecodeError("expected scalar result"))
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn run_row(query: Query, on pool: Pool) -> Result(List(String), Error) {
@@ -787,16 +1008,24 @@ pub fn run_maybe_row_in(
   query: Query,
   within scope: Scope,
 ) -> Result(Option(List(String)), Error) {
-  let Scope(pool, identity) = scope
-  run_maybe_row(apply_scope_identity(query, identity), on: pool)
+  case run_row_in(query, within: scope) {
+    Ok(values) -> Ok(Some(values))
+    Error(NotFound) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn run_row_in(
   query: Query,
   within scope: Scope,
 ) -> Result(List(String), Error) {
-  let Scope(pool, identity) = scope
-  run_row(apply_scope_identity(query, identity), on: pool)
+  case run_in(expect_row(query), within: scope) {
+    Ok(Row(values)) -> Ok(values)
+    Ok(Affected) -> Error(DecodeError("expected row result"))
+    Ok(Scalar(_)) -> Error(DecodeError("expected row result"))
+    Ok(Rows(_)) -> Error(DecodeError("expected row result"))
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn run_rows(
@@ -816,8 +1045,13 @@ pub fn run_rows_in(
   query: Query,
   within scope: Scope,
 ) -> Result(List(List(String)), Error) {
-  let Scope(pool, identity) = scope
-  run_rows(apply_scope_identity(query, identity), on: pool)
+  case run_in(expect_rows(query), within: scope) {
+    Ok(Rows(values)) -> Ok(values)
+    Ok(Affected) -> Error(DecodeError("expected rows result"))
+    Ok(Scalar(_)) -> Error(DecodeError("expected rows result"))
+    Ok(Row(_)) -> Error(DecodeError("expected rows result"))
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn decode_scalar(
@@ -892,12 +1126,15 @@ pub fn run_maybe_decode_in(
   within scope: Scope,
   using decoder: ScalarDecoder(a),
 ) -> Result(Option(a), Error) {
-  let Scope(pool, identity) = scope
-  run_maybe_decode(
-    apply_scope_identity(query, identity),
-    on: pool,
-    using: decoder,
-  )
+  case run_maybe_scalar_in(query, within: scope) {
+    Ok(Some(value)) ->
+      case decode_scalar(value, using: decoder) {
+        Ok(decoded) -> Ok(Some(decoded))
+        Error(reason) -> Error(reason)
+      }
+    Ok(None) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn run_decode_in(
@@ -905,8 +1142,10 @@ pub fn run_decode_in(
   within scope: Scope,
   using decoder: ScalarDecoder(a),
 ) -> Result(a, Error) {
-  let Scope(pool, identity) = scope
-  run_decode(apply_scope_identity(query, identity), on: pool, using: decoder)
+  case run_scalar_in(query, within: scope) {
+    Ok(value) -> decode_scalar(value, using: decoder)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn decode_row(
@@ -965,12 +1204,15 @@ pub fn run_maybe_decode_row_in(
   within scope: Scope,
   using decoder: RowDecoder(a),
 ) -> Result(Option(a), Error) {
-  let Scope(pool, identity) = scope
-  run_maybe_decode_row(
-    apply_scope_identity(query, identity),
-    on: pool,
-    using: decoder,
-  )
+  case run_maybe_row_in(query, within: scope) {
+    Ok(Some(values)) ->
+      case decode_row(values, using: decoder) {
+        Ok(decoded) -> Ok(Some(decoded))
+        Error(reason) -> Error(reason)
+      }
+    Ok(None) -> Ok(None)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn maybe_one_in(
@@ -986,12 +1228,10 @@ pub fn run_decode_row_in(
   within scope: Scope,
   using decoder: RowDecoder(a),
 ) -> Result(a, Error) {
-  let Scope(pool, identity) = scope
-  run_decode_row(
-    apply_scope_identity(query, identity),
-    on: pool,
-    using: decoder,
-  )
+  case run_row_in(query, within: scope) {
+    Ok(values) -> decode_row(values, using: decoder)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn one_in(
@@ -1048,12 +1288,10 @@ pub fn run_decode_rows_in(
   within scope: Scope,
   using decoder: RowDecoder(a),
 ) -> Result(List(a), Error) {
-  let Scope(pool, identity) = scope
-  run_decode_rows(
-    apply_scope_identity(query, identity),
-    on: pool,
-    using: decoder,
-  )
+  case run_rows_in(query, within: scope) {
+    Ok(values) -> decode_rows(values, using: decoder)
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn all_in(
@@ -1118,11 +1356,37 @@ pub fn execute_as(
   sql: String,
   on pool: Pool,
 ) -> Result(Nil, Error) {
+  execute_as_with_session_profile(end_user, sql, pool, None)
+}
+
+fn execute_as_with_session_profile(
+  end_user: String,
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(Nil, Error) {
   let Pool(handle, base_user, base_password) = pool
   let proxy_user = proxy_user(base_user, end_user)
-  case internal.pool_exec_sql(handle, proxy_user, base_password, sql) {
-    Ok(_) -> Ok(Nil)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_exec_sql(handle, proxy_user, base_password, sql) {
+        Ok(_) -> Ok(Nil)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_exec_sql_with_session(
+          handle,
+          proxy_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(_) -> Ok(Nil)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
@@ -1131,11 +1395,37 @@ pub fn scalar_as(
   sql: String,
   on pool: Pool,
 ) -> Result(String, Error) {
+  scalar_as_with_session_profile(end_user, sql, pool, None)
+}
+
+fn scalar_as_with_session_profile(
+  end_user: String,
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(String, Error) {
   let Pool(handle, base_user, base_password) = pool
   let proxy_user = proxy_user(base_user, end_user)
-  case internal.pool_probe_sql(handle, proxy_user, base_password, sql) {
-    Ok(value) -> Ok(value)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_probe_sql(handle, proxy_user, base_password, sql) {
+        Ok(value) -> Ok(value)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_probe_sql_with_session(
+          handle,
+          proxy_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(value) -> Ok(value)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
@@ -1144,11 +1434,37 @@ pub fn row_as(
   sql: String,
   on pool: Pool,
 ) -> Result(List(String), Error) {
+  row_as_with_session_profile(end_user, sql, pool, None)
+}
+
+fn row_as_with_session_profile(
+  end_user: String,
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(List(String), Error) {
   let Pool(handle, base_user, base_password) = pool
   let proxy_user = proxy_user(base_user, end_user)
-  case internal.pool_probe_row(handle, proxy_user, base_password, sql) {
-    Ok(values) -> Ok(values)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_probe_row(handle, proxy_user, base_password, sql) {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_probe_row_with_session(
+          handle,
+          proxy_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
@@ -1157,11 +1473,37 @@ pub fn rows_as(
   sql: String,
   on pool: Pool,
 ) -> Result(List(List(String)), Error) {
+  rows_as_with_session_profile(end_user, sql, pool, None)
+}
+
+fn rows_as_with_session_profile(
+  end_user: String,
+  sql: String,
+  pool: Pool,
+  session_profile: Option(SessionProfile),
+) -> Result(List(List(String)), Error) {
   let Pool(handle, base_user, base_password) = pool
   let proxy_user = proxy_user(base_user, end_user)
-  case internal.pool_probe_rows(handle, proxy_user, base_password, sql) {
-    Ok(values) -> Ok(values)
-    Error(message) -> Error(classify_db_error(message))
+  case session_profile {
+    None ->
+      case internal.pool_probe_rows(handle, proxy_user, base_password, sql) {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
+    Some(SessionProfile(requested_tag, setup_sql)) ->
+      case
+        internal.pool_probe_rows_with_session(
+          handle,
+          proxy_user,
+          base_password,
+          sql,
+          requested_tag,
+          setup_sql,
+        )
+      {
+        Ok(values) -> Ok(values)
+        Error(message) -> Error(classify_db_error(message))
+      }
   }
 }
 
@@ -1244,6 +1586,37 @@ pub fn session_metrics(samples: List(TraceSample)) -> SessionMetrics {
 
 fn proxy_user(base_user: String, end_user: String) -> String {
   base_user <> "[" <> end_user <> "]"
+}
+
+fn build_session_profile(
+  session_initializer: SessionInit(option),
+  option: option,
+) -> SessionProfile {
+  let SessionInit(tag_of, setup_sql) = session_initializer
+  let raw_tag = tag_of(option)
+  let requested_tag = case raw_tag == "" {
+    True -> "SESSION=default"
+    False -> raw_tag
+  }
+  SessionProfile(requested_tag:, setup_sql: setup_sql(option))
+}
+
+fn render_session_action(action: SessionAction) -> String {
+  case action {
+    SetClientIdentifier(value) ->
+      "begin dbms_session.set_identifier('" <> sql_escape(value) <> "'); end;"
+    SetModule(module, step) ->
+      "begin dbms_application_info.set_module('"
+      <> sql_escape(module)
+      <> "', '"
+      <> sql_escape(step)
+      <> "'); end;"
+    Exec(sql) -> sql
+  }
+}
+
+fn sql_escape(value: String) -> String {
+  string.replace(in: value, each: "'", with: "''")
 }
 
 fn apply_scope_identity(query: Query, identity: Identity) -> Query {
