@@ -87,6 +87,10 @@ pub opaque type Pool {
   Pool(handle: dynamic.Dynamic, base_user: String, base_password: String)
 }
 
+pub opaque type Scope {
+  Scope(pool: Pool, identity: Identity)
+}
+
 pub opaque type Trace {
   Trace(handle: dynamic.Dynamic)
 }
@@ -206,6 +210,14 @@ pub fn as_end_user(query: Query, end_user: String) -> Query {
 pub fn as_proxy_user(query: Query, end_user: String) -> Query {
   let Query(sql, params, _identity, expectation) = query
   Query(sql:, params:, identity: Proxy(end_user), expectation:)
+}
+
+pub fn scope(pool: Pool) -> Scope {
+  Scope(pool:, identity: Direct)
+}
+
+pub fn scope_as(pool: Pool, end_user: String) -> Scope {
+  Scope(pool:, identity: Proxy(end_user))
 }
 
 pub fn returning_scalar(query: Query) -> Query {
@@ -542,6 +554,11 @@ pub fn execute_query(
   run(query, on: pool)
 }
 
+pub fn run_in(query: Query, within scope: Scope) -> Result(QueryResult, Error) {
+  let Scope(pool, identity) = scope
+  run(apply_scope_identity(query, identity), on: pool)
+}
+
 pub fn run(query: Query, on pool: Pool) -> Result(QueryResult, Error) {
   let Query(sql, params, identity, expectation) = query
   case render_sql(sql, params) {
@@ -602,6 +619,14 @@ pub fn run_affected(query: Query, on pool: Pool) -> Result(Nil, Error) {
   }
 }
 
+pub fn run_affected_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(Nil, Error) {
+  let Scope(pool, identity) = scope
+  run_affected(apply_scope_identity(query, identity), on: pool)
+}
+
 pub fn run_scalar(query: Query, on pool: Pool) -> Result(String, Error) {
   case run(expect_scalar(query), on: pool) {
     Ok(Scalar(value)) -> Ok(value)
@@ -612,6 +637,14 @@ pub fn run_scalar(query: Query, on pool: Pool) -> Result(String, Error) {
   }
 }
 
+pub fn run_scalar_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(String, Error) {
+  let Scope(pool, identity) = scope
+  run_scalar(apply_scope_identity(query, identity), on: pool)
+}
+
 pub fn run_row(query: Query, on pool: Pool) -> Result(List(String), Error) {
   case run(expect_row(query), on: pool) {
     Ok(Row(values)) -> Ok(values)
@@ -620,6 +653,14 @@ pub fn run_row(query: Query, on pool: Pool) -> Result(List(String), Error) {
     Ok(Rows(_)) -> Error(DecodeError("expected row result"))
     Error(reason) -> Error(reason)
   }
+}
+
+pub fn run_row_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(List(String), Error) {
+  let Scope(pool, identity) = scope
+  run_row(apply_scope_identity(query, identity), on: pool)
 }
 
 pub fn run_rows(
@@ -633,6 +674,14 @@ pub fn run_rows(
     Ok(Row(_)) -> Error(DecodeError("expected rows result"))
     Error(reason) -> Error(reason)
   }
+}
+
+pub fn run_rows_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(List(List(String)), Error) {
+  let Scope(pool, identity) = scope
+  run_rows(apply_scope_identity(query, identity), on: pool)
 }
 
 pub fn decode_scalar(
@@ -654,6 +703,15 @@ pub fn run_decode(
   }
 }
 
+pub fn run_decode_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: ScalarDecoder(a),
+) -> Result(a, Error) {
+  let Scope(pool, identity) = scope
+  run_decode(apply_scope_identity(query, identity), on: pool, using: decoder)
+}
+
 pub fn decode_row(
   values: List(String),
   using decoder: RowDecoder(a),
@@ -671,6 +729,19 @@ pub fn run_decode_row(
     Ok(values) -> decode_row(values, using: decoder)
     Error(reason) -> Error(reason)
   }
+}
+
+pub fn run_decode_row_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: RowDecoder(a),
+) -> Result(a, Error) {
+  let Scope(pool, identity) = scope
+  run_decode_row(
+    apply_scope_identity(query, identity),
+    on: pool,
+    using: decoder,
+  )
 }
 
 pub fn decode_rows(
@@ -706,16 +777,50 @@ pub fn run_decode_rows(
   }
 }
 
+pub fn run_decode_rows_in(
+  query: Query,
+  within scope: Scope,
+  using decoder: RowDecoder(a),
+) -> Result(List(a), Error) {
+  let Scope(pool, identity) = scope
+  run_decode_rows(
+    apply_scope_identity(query, identity),
+    on: pool,
+    using: decoder,
+  )
+}
+
 pub fn run_scalar_int(query: Query, on pool: Pool) -> Result(Int, Error) {
   run_decode(query, on: pool, using: int_decoder())
+}
+
+pub fn run_scalar_int_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(Int, Error) {
+  run_decode_in(query, within: scope, using: int_decoder())
 }
 
 pub fn run_scalar_float(query: Query, on pool: Pool) -> Result(Float, Error) {
   run_decode(query, on: pool, using: float_decoder())
 }
 
+pub fn run_scalar_float_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(Float, Error) {
+  run_decode_in(query, within: scope, using: float_decoder())
+}
+
 pub fn run_scalar_bool(query: Query, on pool: Pool) -> Result(Bool, Error) {
   run_decode(query, on: pool, using: bool_decoder())
+}
+
+pub fn run_scalar_bool_in(
+  query: Query,
+  within scope: Scope,
+) -> Result(Bool, Error) {
+  run_decode_in(query, within: scope, using: bool_decoder())
 }
 
 pub fn to_sql(query: Query) -> Result(String, Error) {
@@ -854,6 +959,14 @@ pub fn session_metrics(samples: List(TraceSample)) -> SessionMetrics {
 
 fn proxy_user(base_user: String, end_user: String) -> String {
   base_user <> "[" <> end_user <> "]"
+}
+
+fn apply_scope_identity(query: Query, identity: Identity) -> Query {
+  let Query(sql, params, query_identity, expectation) = query
+  case query_identity {
+    Direct -> Query(sql:, params:, identity:, expectation:)
+    Proxy(_) -> query
+  }
 }
 
 fn render_sql(statement: String, params: List(Param)) -> Result(String, Error) {
