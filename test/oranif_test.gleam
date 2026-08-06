@@ -42,6 +42,26 @@ pub fn to_sql_fails_for_extra_params_test() {
   }
 }
 
+pub fn bind_ints_and_strings_render_in_order_test() {
+  let built =
+    oranif.query("select ?, ?, ?, ? from dual")
+    |> oranif.bind_ints([7, 8])
+    |> oranif.bind_strings(["Ada", "Lin"])
+    |> oranif.to_sql
+
+  assert built == Ok("select 7, 8, 'Ada', 'Lin' from dual")
+}
+
+pub fn bind_bools_and_floats_render_in_order_test() {
+  let built =
+    oranif.query("select ?, ?, ? from dual")
+    |> oranif.bind_bools([True, False])
+    |> oranif.bind_floats([3.5])
+    |> oranif.to_sql
+
+  assert built == Ok("select 1, 0, 3.5 from dual")
+}
+
 pub fn query_label_is_preserved_across_builders_test() {
   let built =
     oranif.scalar_query("select ? from dual")

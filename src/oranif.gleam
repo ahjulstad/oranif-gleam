@@ -244,6 +244,22 @@ pub fn bind_null(query: Query) -> Query {
   with_param(query, null_param())
 }
 
+pub fn bind_strings(query: Query, values: List(String)) -> Query {
+  with_params(query, list.map(values, string_param))
+}
+
+pub fn bind_ints(query: Query, values: List(Int)) -> Query {
+  with_params(query, list.map(values, int_param))
+}
+
+pub fn bind_floats(query: Query, values: List(Float)) -> Query {
+  with_params(query, list.map(values, float_param))
+}
+
+pub fn bind_bools(query: Query, values: List(Bool)) -> Query {
+  with_params(query, list.map(values, bool_param))
+}
+
 pub fn as_end_user(query: Query, end_user: String) -> Query {
   as_proxy_user(query, end_user)
 }

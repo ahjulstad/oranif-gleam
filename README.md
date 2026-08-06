@@ -81,6 +81,7 @@ let debug_sql =
 
 - `Query` carries SQL, params, identity context, and expected result mode.
 - `bind_int`, `bind_string`, `bind_bool`, `bind_float`, and `bind_null` cover common `?` placeholder values.
+- `bind_ints`, `bind_strings`, `bind_bools`, and `bind_floats` help with repeated positional binding.
 - `with_param` / `with_params` remain available for lower-level composition.
 - `command`, `scalar_query`, `row_query`, and `rows_query` declare query intent up front.
 - `label` and `inspect_query` add lightweight query annotations for debugging and future instrumentation.
