@@ -1,0 +1,29 @@
+name: Oracle Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".devcontainer/**"
+      - "src/**"
+      - "examples/proxy_wrapper_smoke/**"
+      - "scripts/run_proxy_wrapper_smoke.sh"
+      - ".github/workflows/oracle-integration.yml"
+
+jobs:
+  oracle-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Oracle smoke test in devcontainer
+        uses: devcontainers/ci@v0.3
+        with:
+          configFile: .devcontainer/devcontainer.json
+          runCmd: |
+            cd oranif_gleam
+            gleam format --check src test
+            gleam test
+            ./scripts/run_proxy_wrapper_smoke.sh

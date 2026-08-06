@@ -24,7 +24,7 @@ echo "[3/3] Running example"
 LD_LIBRARY_PATH="${ORANIF_FORK_DIR}/c_src/odpi/lib:/opt/instantclient_21_20:/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}" \
 "${ERL_BIN}" \
   -pa "${ORANIF_FORK_DIR}/_build/default/lib/oranif/ebin" \
-  -pa "${ROOT_DIR}/build/dev/erlang/oranif/ebin" \
+  -pa "${ROOT_DIR}/build/dev/erlang/oranif_gleam/ebin" \
   -pa "${ROOT_DIR}/build/dev/erlang/gleam_stdlib/ebin" \
   -pa "${EXAMPLE_DIR}/build/dev/erlang/proxy_wrapper_smoke/ebin" \
   -pa "${EXAMPLE_DIR}/build/dev/erlang/gleam_stdlib/ebin" \

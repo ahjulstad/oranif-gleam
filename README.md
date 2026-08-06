@@ -1,13 +1,94 @@
-# oranif (Gleam wrapper)
+# oranif_gleam
 
 Standalone Gleam wrapper around the Erlang oranif runtime (`dpi` module).
 
 ## Scope
 
-- Idiomatic Gleam API inspired by patterns from pog
+- Composable query API inspired by patterns from pog
 - Pool-first usage
 - Optional proxy end-user routing (`base_user[end_user]`)
 - Optional high-resolution pool tracing and session reuse stats
+
+## Ergonomic query API
+
+The wrapper now uses a composable query object with parameter binding-style builders.
+
+```gleam
+import oranif
+
+let insert_user =
+	oranif.query("insert into app_users (id, display_name, active) values (?, ?, ?)")
+	|> oranif.bind_int(42)
+	|> oranif.bind_string("Ada")
+	|> oranif.bind_bool(True)
+	|> oranif.as_proxy_user("TP_WRITER_1")
+
+let _ = oranif.run_affected(insert_user, on: pool)
+
+let count_users =
+	oranif.query("select count(*) from app_users")
+	|> oranif.as_proxy_user("TP_READER_1")
+
+let total = oranif.run_scalar_int(count_users, on: pool)
+
+let latest_user =
+	oranif.query("select id, display_name from app_users where id = ?")
+	|> oranif.bind_int(42)
+	|> oranif.run_decode_row(
+		on: pool,
+		using: oranif.pair_decoder(
+			first: oranif.int_decoder(),
+			second: oranif.string_decoder(),
+		),
+	)
+
+let active_ids =
+	oranif.query("select id from app_users where active = ? order by id")
+	|> oranif.bind_bool(True)
+	|> oranif.run_decode_rows(on: pool, using: oranif.first_int_decoder())
+```
+
+### Core concepts
+
+- `Query` carries SQL, params, identity context, and expected result mode.
+- `bind_int`, `bind_string`, `bind_bool`, `bind_float`, and `bind_null` cover common `?` placeholder values.
+- `with_param` / `with_params` remain available for lower-level composition.
+- `run`, `run_affected`, `run_scalar`, and typed scalar helpers execute queries.
+- `run_decode` and reusable scalar decoders support type-directed result decoding.
+- `run_row` and `run_decode_row` fetch and decode the first returned row.
+- `run_rows` and `run_decode_rows` fetch and decode whole result sets.
+- `map_scalar_decoder`, `map_row_decoder`, `pair_decoder`, and `triple_decoder` support reusable record-style decoders.
+- `to_sql` renders a query and validates placeholder/parameter counts.
+
+### Error mapping
+
+Common backend failures are mapped into semantic wrapper errors where possible:
+
+- `ORA-00942` -> `MissingTable`
+- `ORA-00001` -> `ConstraintViolation`
+- `ORA-01017` -> `AuthenticationError`
+- `ORA-01031` -> `PermissionDenied`
+- `DPI-1080` -> `PoolTimeout`
+- `ORA-24418` -> `PoolExhausted`
+
+## CI
+
+GitHub Actions workflow runs on push and pull requests and enforces:
+
+- `gleam format --check` for package and example.
+- `gleam build` for package and example.
+- `gleam test` for unit tests in this package.
+
+An additional Oracle-backed integration workflow is available in GitHub Actions.
+It reuses the existing devcontainer Compose setup, starts Oracle Free, and runs:
+
+- `gleam format --check src test`
+- `gleam test`
+- `./scripts/run_proxy_wrapper_smoke.sh`
+
+For local database validation, run:
+
+- [scripts/run_proxy_wrapper_smoke.sh](scripts/run_proxy_wrapper_smoke.sh)
 
 ## Runtime dependency
 

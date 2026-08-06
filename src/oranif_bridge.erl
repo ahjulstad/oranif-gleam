@@ -10,6 +10,8 @@
     pool_exec_sql/4,
     pool_exec_sql_metric/4,
     pool_probe_sql/4,
+    pool_probe_row/4,
+    pool_probe_rows/4,
     pool_probe_sql_metric/4,
     pool_probe_burst_metric/5,
     pool_probe_burst_metric_hold/6,
@@ -160,6 +162,40 @@ pool_probe_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
             Error
     end;
 pool_probe_sql(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+    {error, {invalid_pool_handle, Other}}.
+
+pool_probe_row({Context, Pool}, AcquireUser, AcquirePassword, Sql)
+    when is_reference(Context),
+         is_reference(Pool),
+         is_binary(AcquireUser),
+         is_binary(AcquirePassword),
+         is_binary(Sql) ->
+    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+        execute_and_fetch_row(Conn, Sql)
+    end) of
+        {ok, Result, _BusySample} ->
+            Result;
+        {error, _} = Error ->
+            Error
+    end;
+pool_probe_row(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+    {error, {invalid_pool_handle, Other}}.
+
+pool_probe_rows({Context, Pool}, AcquireUser, AcquirePassword, Sql)
+    when is_reference(Context),
+         is_reference(Pool),
+         is_binary(AcquireUser),
+         is_binary(AcquirePassword),
+         is_binary(Sql) ->
+    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+        execute_and_fetch_rows(Conn, Sql)
+    end) of
+        {ok, Result, _BusySample} ->
+            Result;
+        {error, _} = Error ->
+            Error
+    end;
+pool_probe_rows(Other, _AcquireUser, _AcquirePassword, _Sql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_probe_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -340,6 +376,93 @@ execute_and_fetch_first(Conn, Sql) ->
             end;
         Error ->
             {error, {prepare_failed, Error}}
+    end.
+
+execute_and_fetch_row(Conn, Sql) ->
+    case dpi:conn_prepareStmt(Conn, false, Sql, <<>>) of
+        Stmt when is_reference(Stmt) ->
+            case catch dpi:stmt_execute(Stmt, []) of
+                ExecResult when is_integer(ExecResult), ExecResult >= 1 ->
+                    case dpi:stmt_fetch(Stmt) of
+                        #{found := true} ->
+                            case catch dpi:stmt_getNumQueryColumns(Stmt) of
+                                ColumnCount when is_integer(ColumnCount), ColumnCount >= 1 ->
+                                    Result = fetch_row_values(Stmt, ColumnCount, 1, []),
+                                    _ = dpi:stmt_close(Stmt, <<>>),
+                                    Result;
+                                {'EXIT', Reason} ->
+                                    _ = dpi:stmt_close(Stmt, <<>>),
+                                    {error, {column_count_failed, Reason}};
+                                Other ->
+                                    _ = dpi:stmt_close(Stmt, <<>>),
+                                    {error, {unexpected_column_count, Other}}
+                            end;
+                        _ ->
+                            _ = dpi:stmt_close(Stmt, <<>>),
+                            {error, no_rows}
+                    end;
+                {'EXIT', Reason} ->
+                    _ = catch dpi:stmt_close(Stmt, <<>>),
+                    {error, {execute_failed, Reason}};
+                Other ->
+                    _ = catch dpi:stmt_close(Stmt, <<>>),
+                    {error, {unexpected_exec_result, Other}}
+            end;
+        Error ->
+            {error, {prepare_failed, Error}}
+    end.
+
+execute_and_fetch_rows(Conn, Sql) ->
+    case dpi:conn_prepareStmt(Conn, false, Sql, <<>>) of
+        Stmt when is_reference(Stmt) ->
+            case catch dpi:stmt_execute(Stmt, []) of
+                ExecResult when is_integer(ExecResult), ExecResult >= 1 ->
+                    case catch dpi:stmt_getNumQueryColumns(Stmt) of
+                        ColumnCount when is_integer(ColumnCount), ColumnCount >= 1 ->
+                            Result = fetch_all_rows(Stmt, ColumnCount, []),
+                            _ = dpi:stmt_close(Stmt, <<>>),
+                            Result;
+                        {'EXIT', Reason} ->
+                            _ = dpi:stmt_close(Stmt, <<>>),
+                            {error, {column_count_failed, Reason}};
+                        Other ->
+                            _ = dpi:stmt_close(Stmt, <<>>),
+                            {error, {unexpected_column_count, Other}}
+                    end;
+                {'EXIT', Reason} ->
+                    _ = catch dpi:stmt_close(Stmt, <<>>),
+                    {error, {execute_failed, Reason}};
+                Other ->
+                    _ = catch dpi:stmt_close(Stmt, <<>>),
+                    {error, {unexpected_exec_result, Other}}
+            end;
+        Error ->
+            {error, {prepare_failed, Error}}
+    end.
+
+fetch_row_values(_Stmt, ColumnCount, Position, Acc) when Position > ColumnCount ->
+    {ok, lists:reverse(Acc)};
+fetch_row_values(Stmt, ColumnCount, Position, Acc) ->
+    case dpi:stmt_getQueryValue(Stmt, Position) of
+        #{data := DataRef} ->
+            Value = dpi:data_get(DataRef),
+            _ = dpi:data_release(DataRef),
+            fetch_row_values(Stmt, ColumnCount, Position + 1, [Value | Acc]);
+        Other ->
+            {error, {unexpected_query_value, Position, Other}}
+    end.
+
+fetch_all_rows(Stmt, ColumnCount, Acc) ->
+    case dpi:stmt_fetch(Stmt) of
+        #{found := true} ->
+            case fetch_row_values(Stmt, ColumnCount, 1, []) of
+                {ok, Row} -> fetch_all_rows(Stmt, ColumnCount, [Row | Acc]);
+                {error, _} = Error -> Error
+            end;
+        #{found := false} ->
+            {ok, lists:reverse(Acc)};
+        Other ->
+            {error, {unexpected_fetch_result, Other}}
     end.
 
 execute_no_fetch(Conn, Sql) ->
