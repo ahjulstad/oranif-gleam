@@ -63,6 +63,13 @@ let maybe_user =
 			second: oranif.string_decoder(),
 		),
 	)
+
+let person_decoder =
+	oranif.decode2(
+		first: oranif.int_decoder(),
+		second: oranif.string_decoder(),
+		with: Person,
+	)
 ```
 
 ### Core concepts
@@ -77,6 +84,7 @@ let maybe_user =
 - `run_rows` and `run_decode_rows` fetch and decode whole result sets.
 - `run_maybe_scalar`, `run_maybe_row`, and `run_maybe_decode_row` turn `NotFound` lookups into `Option` values.
 - `scope_as` plus `run_*_in` let you reuse pool and proxy identity context across many queries.
+- `decode2` and `decode3` build row decoders directly into your own record or value constructors.
 - `map_scalar_decoder`, `map_row_decoder`, `pair_decoder`, and `triple_decoder` support reusable record-style decoders.
 - `to_sql` renders a query and validates placeholder/parameter counts.
 

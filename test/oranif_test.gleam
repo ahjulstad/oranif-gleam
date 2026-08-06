@@ -1,6 +1,10 @@
 import gleam/int
 import oranif
 
+type Person {
+  Person(id: Int, name: String)
+}
+
 pub fn to_sql_renders_positional_params_test() {
   let built =
     oranif.query("insert into t (id, name, active) values (?, ?, ?)")
@@ -186,5 +190,38 @@ pub fn first_string_decoder_returns_not_found_for_empty_row_test() {
   case oranif.decode_row([], using: oranif.first_string_decoder()) {
     Error(oranif.NotFound) -> Nil
     _ -> panic as "expected NotFound"
+  }
+}
+
+pub fn decode2_builds_custom_record_test() {
+  let decoder =
+    oranif.decode2(
+      first: oranif.int_decoder(),
+      second: oranif.string_decoder(),
+      with: Person,
+    )
+
+  assert oranif.decode_row(["7", "Ada"], using: decoder) == Ok(Person(7, "Ada"))
+}
+
+pub fn decode3_builds_custom_value_test() {
+  let decoder =
+    oranif.decode3(
+      first: oranif.int_decoder(),
+      second: oranif.string_decoder(),
+      third: oranif.bool_decoder(),
+      with: fn(id, name, active) {
+        name <> ":" <> int.to_string(id) <> ":" <> string_from_bool(active)
+      },
+    )
+
+  assert oranif.decode_row(["7", "Ada", "true"], using: decoder)
+    == Ok("Ada:7:true")
+}
+
+fn string_from_bool(value: Bool) -> String {
+  case value {
+    True -> "true"
+    False -> "false"
   }
 }

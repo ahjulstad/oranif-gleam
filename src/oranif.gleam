@@ -406,6 +406,18 @@ pub fn pair_decoder(
   })
 }
 
+pub fn decode2(
+  first first_decoder: ScalarDecoder(a),
+  second second_decoder: ScalarDecoder(b),
+  with builder: fn(a, b) -> c,
+) -> RowDecoder(c) {
+  pair_decoder(first: first_decoder, second: second_decoder)
+  |> map_row_decoder(with: fn(pair) {
+    let #(first, second) = pair
+    builder(first, second)
+  })
+}
+
 pub fn triple_decoder(
   first first_decoder: ScalarDecoder(a),
   second second_decoder: ScalarDecoder(b),
@@ -431,6 +443,23 @@ pub fn triple_decoder(
       [_] -> Error(DecodeError("expected at least 3 columns in row"))
       [_, _] -> Error(DecodeError("expected at least 3 columns in row"))
     }
+  })
+}
+
+pub fn decode3(
+  first first_decoder: ScalarDecoder(a),
+  second second_decoder: ScalarDecoder(b),
+  third third_decoder: ScalarDecoder(c),
+  with builder: fn(a, b, c) -> d,
+) -> RowDecoder(d) {
+  triple_decoder(
+    first: first_decoder,
+    second: second_decoder,
+    third: third_decoder,
+  )
+  |> map_row_decoder(with: fn(tuple) {
+    let #(first, second, third) = tuple
+    builder(first, second, third)
   })
 }
 
