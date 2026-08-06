@@ -1,0 +1,4 @@
+/build/
+examples/*/build/
+*.dump
+erl_crash.dump

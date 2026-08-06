@@ -1,0 +1,10 @@
+name = "proxy_wrapper_smoke"
+version = "0.1.0"
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+oranif_gleam = { path = "../.." }
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

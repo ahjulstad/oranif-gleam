@@ -1,0 +1,12 @@
+name = "oranif_gleam"
+version = "0.1.0"
+target = "erlang"
+
+description = "Oracle database wrapper for Gleam using oranif/ODPI"
+licences = ["Apache-2.0"]
+
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+
+[dev_dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
