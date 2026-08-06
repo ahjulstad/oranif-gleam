@@ -70,6 +70,11 @@ let person_decoder =
 		second: oranif.string_decoder(),
 		with: Person,
 	)
+
+let debug_sql =
+	oranif.scalar_query("select count(*) from app_users")
+	|> oranif.label("dashboard:user-count")
+	|> oranif.inspect_query
 ```
 
 ### Core concepts
@@ -78,6 +83,7 @@ let person_decoder =
 - `bind_int`, `bind_string`, `bind_bool`, `bind_float`, and `bind_null` cover common `?` placeholder values.
 - `with_param` / `with_params` remain available for lower-level composition.
 - `command`, `scalar_query`, `row_query`, and `rows_query` declare query intent up front.
+- `label` and `inspect_query` add lightweight query annotations for debugging and future instrumentation.
 - `run`, `run_affected`, `run_scalar`, and typed scalar helpers execute queries.
 - `run_decode` and reusable scalar decoders support type-directed result decoding.
 - `run_row` and `run_decode_row` fetch and decode the first returned row.

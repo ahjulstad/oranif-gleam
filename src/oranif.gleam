@@ -155,6 +155,7 @@ pub opaque type Query {
     params: List(Param),
     identity: Identity,
     expectation: Expectation,
+    label: Option(String),
   )
 }
 
@@ -166,7 +167,13 @@ pub type QueryResult {
 }
 
 pub fn query(sql: String) -> Query {
-  Query(sql:, params: [], identity: Direct, expectation: ExpectAffected)
+  Query(
+    sql:,
+    params: [],
+    identity: Direct,
+    expectation: ExpectAffected,
+    label: None,
+  )
 }
 
 pub fn command(sql: String) -> Query {
@@ -186,18 +193,35 @@ pub fn rows_query(sql: String) -> Query {
 }
 
 pub fn with_param(query: Query, param: Param) -> Query {
-  let Query(sql, params, identity, expectation) = query
-  Query(sql:, params: list.append(params, [param]), identity:, expectation:)
+  let Query(sql, params, identity, expectation, label) = query
+  Query(
+    sql:,
+    params: list.append(params, [param]),
+    identity:,
+    expectation:,
+    label:,
+  )
 }
 
 pub fn with_params(query: Query, params: List(Param)) -> Query {
-  let Query(sql, existing_params, identity, expectation) = query
+  let Query(sql, existing_params, identity, expectation, label) = query
   Query(
     sql:,
     params: list.append(existing_params, params),
     identity:,
     expectation:,
+    label:,
   )
+}
+
+pub fn label(query: Query, name: String) -> Query {
+  let Query(sql, params, identity, expectation, _label) = query
+  Query(sql:, params:, identity:, expectation:, label: Some(name))
+}
+
+pub fn query_label(query: Query) -> Option(String) {
+  let Query(_sql, _params, _identity, _expectation, label) = query
+  label
 }
 
 pub fn bind_string(query: Query, value: String) -> Query {
@@ -225,8 +249,8 @@ pub fn as_end_user(query: Query, end_user: String) -> Query {
 }
 
 pub fn as_proxy_user(query: Query, end_user: String) -> Query {
-  let Query(sql, params, _identity, expectation) = query
-  Query(sql:, params:, identity: Proxy(end_user), expectation:)
+  let Query(sql, params, _identity, expectation, label) = query
+  Query(sql:, params:, identity: Proxy(end_user), expectation:, label:)
 }
 
 pub fn scope(pool: Pool) -> Scope {
@@ -242,23 +266,23 @@ pub fn returning_scalar(query: Query) -> Query {
 }
 
 pub fn expect_scalar(query: Query) -> Query {
-  let Query(sql, params, identity, _expectation) = query
-  Query(sql:, params:, identity:, expectation: ExpectScalar)
+  let Query(sql, params, identity, _expectation, label) = query
+  Query(sql:, params:, identity:, expectation: ExpectScalar, label:)
 }
 
 pub fn expect_row(query: Query) -> Query {
-  let Query(sql, params, identity, _expectation) = query
-  Query(sql:, params:, identity:, expectation: ExpectRow)
+  let Query(sql, params, identity, _expectation, label) = query
+  Query(sql:, params:, identity:, expectation: ExpectRow, label:)
 }
 
 pub fn expect_rows(query: Query) -> Query {
-  let Query(sql, params, identity, _expectation) = query
-  Query(sql:, params:, identity:, expectation: ExpectRows)
+  let Query(sql, params, identity, _expectation, label) = query
+  Query(sql:, params:, identity:, expectation: ExpectRows, label:)
 }
 
 pub fn expect_affected(query: Query) -> Query {
-  let Query(sql, params, identity, _expectation) = query
-  Query(sql:, params:, identity:, expectation: ExpectAffected)
+  let Query(sql, params, identity, _expectation, label) = query
+  Query(sql:, params:, identity:, expectation: ExpectAffected, label:)
 }
 
 pub fn string_param(value: String) -> Param {
@@ -606,7 +630,7 @@ pub fn run_in(query: Query, within scope: Scope) -> Result(QueryResult, Error) {
 }
 
 pub fn run(query: Query, on pool: Pool) -> Result(QueryResult, Error) {
-  let Query(sql, params, identity, expectation) = query
+  let Query(sql, params, identity, expectation, _label) = query
   case render_sql(sql, params) {
     Error(reason) -> Error(reason)
     Ok(compiled_sql) ->
@@ -966,8 +990,19 @@ pub fn run_scalar_bool_in(
 }
 
 pub fn to_sql(query: Query) -> Result(String, Error) {
-  let Query(sql, params, _identity, _expectation) = query
+  let Query(sql, params, _identity, _expectation, _label) = query
   render_sql(sql, params)
+}
+
+pub fn inspect_query(query: Query) -> Result(String, Error) {
+  case to_sql(query) {
+    Ok(rendered) ->
+      case query_label(query) {
+        Some(name) -> Ok("[" <> name <> "] " <> rendered)
+        None -> Ok(rendered)
+      }
+    Error(reason) -> Error(reason)
+  }
 }
 
 pub fn execute_as(
@@ -1104,9 +1139,9 @@ fn proxy_user(base_user: String, end_user: String) -> String {
 }
 
 fn apply_scope_identity(query: Query, identity: Identity) -> Query {
-  let Query(sql, params, query_identity, expectation) = query
+  let Query(sql, params, query_identity, expectation, label) = query
   case query_identity {
-    Direct -> Query(sql:, params:, identity:, expectation:)
+    Direct -> Query(sql:, params:, identity:, expectation:, label:)
     Proxy(_) -> query
   }
 }

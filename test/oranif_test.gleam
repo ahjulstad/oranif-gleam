@@ -1,4 +1,5 @@
 import gleam/int
+import gleam/option.{Some}
 import oranif
 
 type Person {
@@ -39,6 +40,24 @@ pub fn to_sql_fails_for_extra_params_test() {
     Error(oranif.QueryBuildError(_)) -> Nil
     _ -> panic as "expected QueryBuildError"
   }
+}
+
+pub fn query_label_is_preserved_across_builders_test() {
+  let built =
+    oranif.scalar_query("select ? from dual")
+    |> oranif.label("health-check")
+    |> oranif.bind_int(7)
+
+  assert oranif.query_label(built) == Some("health-check")
+}
+
+pub fn inspect_query_prefixes_rendered_sql_with_label_test() {
+  let built =
+    oranif.query("select ? from dual")
+    |> oranif.label("latest-users")
+    |> oranif.bind_int(7)
+
+  assert oranif.inspect_query(built) == Ok("[latest-users] select 7 from dual")
 }
 
 pub fn classify_db_error_maps_missing_table_test() {
