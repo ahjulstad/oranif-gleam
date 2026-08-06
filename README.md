@@ -2,12 +2,52 @@
 
 Standalone Gleam wrapper around the Erlang oranif runtime (`dpi` module).
 
+## Status
+
+This repository is the publishable source of truth for the Gleam wrapper.
+It includes:
+
+- the public Gleam API
+- the Erlang bridge used at runtime
+- local Oracle-backed development and validation tooling
+- CI workflows for both fast package checks and Oracle-backed integration checks
+
 ## Scope
 
 - Composable query API inspired by patterns from pog
 - Pool-first usage
 - Optional proxy end-user routing (`base_user[end_user]`)
 - Optional high-resolution pool tracing and session reuse stats
+
+## Getting Started
+
+### Prerequisites
+
+You need the Erlang `dpi` runtime available at execution time.
+For local development, the easiest path is the included devcontainer.
+
+### Recommended local setup
+
+1. Open the repository root in VS Code.
+2. Choose **Reopen in Container**.
+3. Wait for the `main` devcontainer and the `oracle` sidecar container to start.
+4. Run the smoke test:
+
+```bash
+./scripts/run_proxy_wrapper_smoke.sh
+```
+
+The devcontainer is documented in [.devcontainer/README.md](.devcontainer/README.md).
+
+### Non-devcontainer setup
+
+If you do not use the devcontainer, you are responsible for providing:
+
+- Gleam
+- Erlang/OTP
+- Rebar3
+- Oracle Instant Client
+- a build of the Erlang `oranif` runtime used by the smoke script
 
 ## Ergonomic query API
 
@@ -77,6 +117,26 @@ let debug_sql =
 	|> oranif.inspect_query
 ```
 
+## Development Flow
+
+Typical work on this repository should follow this order:
+
+1. Make a small API or runtime change.
+2. Run package validation:
+
+```bash
+gleam format --check src test
+gleam test
+```
+
+3. For any database-facing change, also run:
+
+```bash
+./scripts/run_proxy_wrapper_smoke.sh
+```
+
+4. Commit only after the relevant checks pass.
+
 ### Core concepts
 
 - `Query` carries SQL, params, identity context, and expected result mode.
@@ -115,6 +175,8 @@ GitHub Actions workflow runs on push and pull requests and enforces:
 - `gleam build` for package and example.
 - `gleam test` for unit tests in this package.
 
+This workflow is defined in [.github/workflows/ci.yml](.github/workflows/ci.yml).
+
 An additional Oracle-backed integration workflow is available in GitHub Actions.
 It reuses the existing devcontainer Compose setup, starts Oracle Free, and runs:
 
@@ -122,13 +184,39 @@ It reuses the existing devcontainer Compose setup, starts Oracle Free, and runs:
 - `gleam test`
 - `./scripts/run_proxy_wrapper_smoke.sh`
 
+This workflow is defined in [.github/workflows/oracle-integration.yml](.github/workflows/oracle-integration.yml).
+
 For local database validation, run:
 
 - [scripts/run_proxy_wrapper_smoke.sh](scripts/run_proxy_wrapper_smoke.sh)
 
 ## Devcontainer
 
-This repository includes its own [repos/oranif-gleam/.devcontainer](repos/oranif-gleam/.devcontainer) setup for local Oracle-backed development and for the Oracle integration GitHub workflow.
+This repository includes its own `.devcontainer` setup for local Oracle-backed development and for the Oracle integration GitHub workflow.
+
+Open the repository root in VS Code and choose **Reopen in Container** to start:
+
+- a development container with Gleam, OTP, Rebar3, Instant Client, and Docker installed
+- an `oracle` sidecar container based on `gvenzl/oracle-free`
+
+Once the container is up, the main local validation command is:
+
+```bash
+./scripts/run_proxy_wrapper_smoke.sh
+```
+
+That script builds the package, builds the smoke example, and runs it against the Oracle sidecar.
+
+For container-specific details, see [.devcontainer/README.md](.devcontainer/README.md).
+
+## Repository Layout
+
+- `src/` — public Gleam API and Erlang runtime bridge
+- `test/` — pure package tests for builders, decoders, and error mapping
+- `examples/proxy_wrapper_smoke/` — Oracle-backed integration example
+- `scripts/run_proxy_wrapper_smoke.sh` — main local Oracle-backed validation command
+- `.devcontainer/` — standalone local development and integration environment
+- `.github/workflows/` — CI and Oracle integration workflows
 
 ## Runtime dependency
 

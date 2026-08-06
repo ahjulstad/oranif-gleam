@@ -23,7 +23,6 @@ jobs:
         with:
           configFile: .devcontainer/devcontainer.json
           runCmd: |
-            cd oranif_gleam
             gleam format --check src test
             gleam test
             ./scripts/run_proxy_wrapper_smoke.sh
