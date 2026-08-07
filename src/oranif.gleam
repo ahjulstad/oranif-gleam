@@ -6,6 +6,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/string
 import oranif/internal
 
+/// The semantic error variants returned by this wrapper.
 pub type Error {
   DbError(message: String)
   MissingTable(message: String)
@@ -20,6 +21,7 @@ pub type Error {
   NotFound
 }
 
+/// Extract the human-readable message from an error value.
 pub fn error_message(error: Error) -> String {
   case error {
     DbError(message) -> message
@@ -36,6 +38,7 @@ pub fn error_message(error: Error) -> String {
   }
 }
 
+/// Map backend and bridge error text into a richer public error variant.
 pub fn classify_db_error(message: String) -> Error {
   let normalized = string.uppercase(message)
   case string.contains(does: normalized, contain: "SESSION_INIT_FAILED") {
@@ -75,6 +78,7 @@ pub fn classify_db_error(message: String) -> Error {
   }
 }
 
+/// Connection settings for starting a pool-backed client.
 pub type Config {
   Config(
     host: String,
@@ -86,6 +90,7 @@ pub type Config {
   )
 }
 
+/// Pool sizing and timeout settings used when opening a pool.
 pub type PoolConfig {
   PoolConfig(
     min_sessions: Int,
@@ -95,26 +100,32 @@ pub type PoolConfig {
   )
 }
 
+/// A started connection pool.
 pub opaque type Pool {
   Pool(handle: dynamic.Dynamic, base_user: String, base_password: String)
 }
 
+/// A reusable execution scope carrying identity and optional session setup.
 pub opaque type Scope {
   Scope(pool: Pool, identity: Identity, session_profile: Option(SessionProfile))
 }
 
+/// A pool bundled with a typed session initializer.
 pub opaque type PreparedPool(option) {
   PreparedPool(pool: Pool, session_init: SessionInit(option))
 }
 
+/// A handle for collecting pool trace samples.
 pub opaque type Trace {
   Trace(handle: dynamic.Dynamic)
 }
 
+/// Snapshot counts for open and busy pool sessions.
 pub type PoolStats {
   PoolStats(open: Int, busy: Int)
 }
 
+/// Aggregated session affinity counters derived from trace samples.
 pub type SessionMetrics {
   SessionMetrics(
     writer_init_total: Int,
@@ -124,6 +135,7 @@ pub type SessionMetrics {
   )
 }
 
+/// One sample emitted while tracing pool and session reuse activity.
 pub type TraceSample {
   TraceSample(
     elapsed_ms: Int,
@@ -136,6 +148,7 @@ pub type TraceSample {
   )
 }
 
+/// A typed session initialization plan keyed by a per-checkout option value.
 pub type SessionInit(option) {
   SessionInit(
     tag_of: fn(option) -> String,
@@ -143,6 +156,7 @@ pub type SessionInit(option) {
   )
 }
 
+/// High-level session setup operations rendered into Oracle session SQL.
 pub type SessionAction {
   SetClientIdentifier(value: String)
   SetClientInfo(value: String)
@@ -156,6 +170,7 @@ type SessionProfile {
   SessionProfile(requested_tag: String, setup_sql: List(String))
 }
 
+/// A positional query parameter value.
 pub type Param {
   StringParam(value: String)
   IntParam(value: Int)
@@ -164,11 +179,13 @@ pub type Param {
   NullParam
 }
 
+/// The identity to use when acquiring a connection from the pool.
 pub type Identity {
   Direct
   Proxy(end_user: String)
 }
 
+/// The shape of result a query is expected to return.
 pub type Expectation {
   ExpectAffected
   ExpectScalar
@@ -176,14 +193,17 @@ pub type Expectation {
   ExpectRows
 }
 
+/// A decoder for a single scalar string value.
 pub type ScalarDecoder(a) {
   ScalarDecoder(decode: fn(String) -> Result(a, Error))
 }
 
+/// A decoder for a row represented as a list of string values.
 pub type RowDecoder(a) {
   RowDecoder(decode: fn(List(String)) -> Result(a, Error))
 }
 
+/// An immutable query builder carrying SQL, params, identity, and expectation.
 pub opaque type Query {
   Query(
     sql: String,
@@ -194,6 +214,7 @@ pub opaque type Query {
   )
 }
 
+/// The raw execution result variants returned by `run`.
 pub type QueryResult {
   Affected
   Scalar(value: String)
@@ -201,6 +222,7 @@ pub type QueryResult {
   Rows(values: List(List(String)))
 }
 
+/// Start building a query from SQL text.
 pub fn query(sql: String) -> Query {
   Query(
     sql:,
@@ -211,22 +233,27 @@ pub fn query(sql: String) -> Query {
   )
 }
 
+/// Alias for `query` when the SQL is primarily a command.
 pub fn command(sql: String) -> Query {
   query(sql)
 }
 
+/// Start a query that is expected to return a scalar value.
 pub fn scalar_query(sql: String) -> Query {
   query(sql) |> expect_scalar
 }
 
+/// Start a query that is expected to return a single row.
 pub fn row_query(sql: String) -> Query {
   query(sql) |> expect_row
 }
 
+/// Start a query that is expected to return many rows.
 pub fn rows_query(sql: String) -> Query {
   query(sql) |> expect_rows
 }
 
+/// Append one positional parameter to a query.
 pub fn with_param(query: Query, param: Param) -> Query {
   let Query(sql, params, identity, expectation, label) = query
   Query(
@@ -238,6 +265,7 @@ pub fn with_param(query: Query, param: Param) -> Query {
   )
 }
 
+/// Append many positional parameters to a query.
 pub fn with_params(query: Query, params: List(Param)) -> Query {
   let Query(sql, existing_params, identity, expectation, label) = query
   Query(
@@ -249,73 +277,90 @@ pub fn with_params(query: Query, params: List(Param)) -> Query {
   )
 }
 
+/// Alias for `with_params` for mixed prebuilt parameter lists.
 pub fn bind_all(query: Query, params: List(Param)) -> Query {
   with_params(query, params)
 }
 
+/// Attach a descriptive label to a query for debugging or instrumentation.
 pub fn label(query: Query, name: String) -> Query {
   let Query(sql, params, identity, expectation, _label) = query
   Query(sql:, params:, identity:, expectation:, label: Some(name))
 }
 
+/// Read the label attached to a query, if any.
 pub fn query_label(query: Query) -> Option(String) {
   let Query(_sql, _params, _identity, _expectation, label) = query
   label
 }
 
+/// Append a string parameter to a query.
 pub fn bind_string(query: Query, value: String) -> Query {
   with_param(query, string_param(value))
 }
 
+/// Append an integer parameter to a query.
 pub fn bind_int(query: Query, value: Int) -> Query {
   with_param(query, int_param(value))
 }
 
+/// Append a float parameter to a query.
 pub fn bind_float(query: Query, value: Float) -> Query {
   with_param(query, float_param(value))
 }
 
+/// Append a boolean parameter to a query.
 pub fn bind_bool(query: Query, value: Bool) -> Query {
   with_param(query, bool_param(value))
 }
 
+/// Append a null parameter to a query.
 pub fn bind_null(query: Query) -> Query {
   with_param(query, null_param())
 }
 
+/// Append many string parameters to a query.
 pub fn bind_strings(query: Query, values: List(String)) -> Query {
   with_params(query, list.map(values, string_param))
 }
 
+/// Append many integer parameters to a query.
 pub fn bind_ints(query: Query, values: List(Int)) -> Query {
   with_params(query, list.map(values, int_param))
 }
 
+/// Append many float parameters to a query.
 pub fn bind_floats(query: Query, values: List(Float)) -> Query {
   with_params(query, list.map(values, float_param))
 }
 
+/// Append many boolean parameters to a query.
 pub fn bind_bools(query: Query, values: List(Bool)) -> Query {
   with_params(query, list.map(values, bool_param))
 }
 
+/// Alias for `as_proxy_user`.
 pub fn as_end_user(query: Query, end_user: String) -> Query {
   as_proxy_user(query, end_user)
 }
 
+/// Mark a query to run as a proxy user when executed.
 pub fn as_proxy_user(query: Query, end_user: String) -> Query {
   let Query(sql, params, _identity, expectation, label) = query
   Query(sql:, params:, identity: Proxy(end_user), expectation:, label:)
 }
 
+/// Build a direct execution scope for a pool.
 pub fn scope(pool: Pool) -> Scope {
   Scope(pool:, identity: Direct, session_profile: None)
 }
 
+/// Build a proxy-user execution scope for a pool.
 pub fn scope_as(pool: Pool, end_user: String) -> Scope {
   Scope(pool:, identity: Proxy(end_user), session_profile: None)
 }
 
+/// Build a typed session initializer from high-level session actions.
 pub fn session_init(
   tag_of: fn(option) -> String,
   setup_sql: fn(option) -> List(SessionAction),
@@ -325,6 +370,7 @@ pub fn session_init(
   })
 }
 
+/// Build a typed session initializer from raw setup SQL.
 pub fn session_init_sql(
   tag_of: fn(option) -> String,
   setup_sql: fn(option) -> List(String),
@@ -332,6 +378,7 @@ pub fn session_init_sql(
   SessionInit(tag_of:, setup_sql:)
 }
 
+/// Combine a started pool with a typed session initializer.
 pub fn prepare_pool(
   pool: Pool,
   with session_initializer: SessionInit(option),
@@ -339,6 +386,7 @@ pub fn prepare_pool(
   PreparedPool(pool:, session_init: session_initializer)
 }
 
+/// Build a direct scope that also applies typed session initialization.
 pub fn scope_with(
   prepared_pool: PreparedPool(option),
   option: option,
@@ -351,6 +399,7 @@ pub fn scope_with(
   )
 }
 
+/// Build a proxy-user scope that also applies typed session initialization.
 pub fn scope_as_with(
   prepared_pool: PreparedPool(option),
   end_user: String,
@@ -364,54 +413,66 @@ pub fn scope_as_with(
   )
 }
 
+/// Alias for `expect_scalar`.
 pub fn returning_scalar(query: Query) -> Query {
   expect_scalar(query)
 }
 
+/// Change a query expectation to a scalar result.
 pub fn expect_scalar(query: Query) -> Query {
   let Query(sql, params, identity, _expectation, label) = query
   Query(sql:, params:, identity:, expectation: ExpectScalar, label:)
 }
 
+/// Change a query expectation to a single-row result.
 pub fn expect_row(query: Query) -> Query {
   let Query(sql, params, identity, _expectation, label) = query
   Query(sql:, params:, identity:, expectation: ExpectRow, label:)
 }
 
+/// Change a query expectation to a multi-row result.
 pub fn expect_rows(query: Query) -> Query {
   let Query(sql, params, identity, _expectation, label) = query
   Query(sql:, params:, identity:, expectation: ExpectRows, label:)
 }
 
+/// Change a query expectation to an affected-rows command result.
 pub fn expect_affected(query: Query) -> Query {
   let Query(sql, params, identity, _expectation, label) = query
   Query(sql:, params:, identity:, expectation: ExpectAffected, label:)
 }
 
+/// Create a string parameter value.
 pub fn string_param(value: String) -> Param {
   StringParam(value)
 }
 
+/// Create an integer parameter value.
 pub fn int_param(value: Int) -> Param {
   IntParam(value)
 }
 
+/// Create a float parameter value.
 pub fn float_param(value: Float) -> Param {
   FloatParam(value)
 }
 
+/// Create a boolean parameter value.
 pub fn bool_param(value: Bool) -> Param {
   BoolParam(value)
 }
 
+/// Create a null parameter value.
 pub fn null_param() -> Param {
   NullParam
 }
 
+/// A scalar decoder that returns the raw string unchanged.
 pub fn string_decoder() -> ScalarDecoder(String) {
   ScalarDecoder(fn(value) { Ok(value) })
 }
 
+/// Transform the successful output of a scalar decoder.
 pub fn map_scalar_decoder(
   decoder: ScalarDecoder(a),
   with mapper: fn(a) -> b,
@@ -424,6 +485,7 @@ pub fn map_scalar_decoder(
   })
 }
 
+/// Decode integers, accepting whole-number float strings such as `80.0`.
 pub fn int_decoder() -> ScalarDecoder(Int) {
   ScalarDecoder(fn(value) {
     case int.parse(value) {
@@ -447,6 +509,7 @@ pub fn int_decoder() -> ScalarDecoder(Int) {
   })
 }
 
+/// Decode floating-point numbers from scalar strings.
 pub fn float_decoder() -> ScalarDecoder(Float) {
   ScalarDecoder(fn(value) {
     case float.parse(value) {
@@ -457,6 +520,7 @@ pub fn float_decoder() -> ScalarDecoder(Float) {
   })
 }
 
+/// Decode common truthy and falsy scalar string representations.
 pub fn bool_decoder() -> ScalarDecoder(Bool) {
   ScalarDecoder(fn(value) {
     case string.lowercase(value) {
@@ -476,12 +540,14 @@ pub fn bool_decoder() -> ScalarDecoder(Bool) {
   })
 }
 
+/// Build a row decoder from a custom row decoding function.
 pub fn row_decoder(
   decode: fn(List(String)) -> Result(a, Error),
 ) -> RowDecoder(a) {
   RowDecoder(decode)
 }
 
+/// Transform the successful output of a row decoder.
 pub fn map_row_decoder(
   decoder: RowDecoder(a),
   with mapper: fn(a) -> b,
@@ -494,6 +560,7 @@ pub fn map_row_decoder(
   })
 }
 
+/// Decode the first column of a row as a string.
 pub fn first_string_decoder() -> RowDecoder(String) {
   RowDecoder(fn(values) {
     case values {
@@ -503,6 +570,7 @@ pub fn first_string_decoder() -> RowDecoder(String) {
   })
 }
 
+/// Decode the first column of a row as an integer.
 pub fn first_int_decoder() -> RowDecoder(Int) {
   RowDecoder(fn(values) {
     case values {
@@ -512,6 +580,7 @@ pub fn first_int_decoder() -> RowDecoder(Int) {
   })
 }
 
+/// Decode the first two columns of a row with independent scalar decoders.
 pub fn pair_decoder(
   first first_decoder: ScalarDecoder(a),
   second second_decoder: ScalarDecoder(b),
@@ -533,6 +602,7 @@ pub fn pair_decoder(
   })
 }
 
+/// Decode the first two columns and build a custom value.
 pub fn decode2(
   first first_decoder: ScalarDecoder(a),
   second second_decoder: ScalarDecoder(b),
@@ -545,6 +615,7 @@ pub fn decode2(
   })
 }
 
+/// Decode the first three columns of a row with independent scalar decoders.
 pub fn triple_decoder(
   first first_decoder: ScalarDecoder(a),
   second second_decoder: ScalarDecoder(b),
@@ -573,6 +644,7 @@ pub fn triple_decoder(
   })
 }
 
+/// Decode the first three columns and build a custom value.
 pub fn decode3(
   first first_decoder: ScalarDecoder(a),
   second second_decoder: ScalarDecoder(b),
@@ -590,6 +662,7 @@ pub fn decode3(
   })
 }
 
+/// Default pool sizing and timeout settings.
 pub fn default_pool_config() -> PoolConfig {
   PoolConfig(
     min_sessions: 2,
@@ -599,6 +672,7 @@ pub fn default_pool_config() -> PoolConfig {
   )
 }
 
+/// Default connection settings for local Oracle development.
 pub fn default_config() -> Config {
   Config(
     host: "127.0.0.1",
@@ -610,34 +684,42 @@ pub fn default_config() -> Config {
   )
 }
 
+/// Set the Oracle host for a config value.
 pub fn host(config: Config, host: String) -> Config {
   Config(..config, host:)
 }
 
+/// Set the Oracle port for a config value.
 pub fn port(config: Config, port: Int) -> Config {
   Config(..config, port:)
 }
 
+/// Set the Oracle service name for a config value.
 pub fn service(config: Config, service: String) -> Config {
   Config(..config, service:)
 }
 
+/// Set the base database user for a config value.
 pub fn user(config: Config, user: String) -> Config {
   Config(..config, user:)
 }
 
+/// Set the base database password for a config value.
 pub fn password(config: Config, password: String) -> Config {
   Config(..config, password:)
 }
 
+/// Replace the pool settings inside a config value.
 pub fn pool_config(config: Config, pool: PoolConfig) -> Config {
   Config(..config, pool:)
 }
 
+/// Set the minimum number of sessions kept in the pool.
 pub fn min_sessions(config: PoolConfig, min_sessions: Int) -> PoolConfig {
   PoolConfig(..config, min_sessions:)
 }
 
+/// Set the idle timeout, in seconds, for pooled sessions.
 pub fn idle_timeout_sec(
   config: PoolConfig,
   idle_timeout_sec: Int,
@@ -645,14 +727,17 @@ pub fn idle_timeout_sec(
   PoolConfig(..config, idle_timeout_sec:)
 }
 
+/// Set the wait timeout, in milliseconds, for pool acquisition.
 pub fn wait_timeout_ms(config: PoolConfig, wait_timeout_ms: Int) -> PoolConfig {
   PoolConfig(..config, wait_timeout_ms:)
 }
 
+/// Control whether the pool is homogeneous.
 pub fn homogeneous(config: PoolConfig, homogeneous: Bool) -> PoolConfig {
   PoolConfig(..config, homogeneous:)
 }
 
+/// Start a pool from the supplied config.
 pub fn start(config: Config) -> Result(Pool, Error) {
   let Config(
     host,
@@ -680,6 +765,7 @@ pub fn start(config: Config) -> Result(Pool, Error) {
   }
 }
 
+/// Close a started pool.
 pub fn stop(pool: Pool) -> Result(Nil, Error) {
   let Pool(handle, _base_user, _base_password) = pool
   case internal.pool_close(handle) {
@@ -688,6 +774,7 @@ pub fn stop(pool: Pool) -> Result(Nil, Error) {
   }
 }
 
+/// Execute command SQL directly against a pool.
 pub fn execute(sql: String, on pool: Pool) -> Result(Nil, Error) {
   execute_with_session_profile(sql, pool, None)
 }
@@ -721,6 +808,7 @@ fn execute_with_session_profile(
   }
 }
 
+/// Run scalar SQL directly against a pool and return the first column.
 pub fn scalar(sql: String, on pool: Pool) -> Result(String, Error) {
   scalar_with_session_profile(sql, pool, None)
 }
@@ -754,6 +842,7 @@ fn scalar_with_session_profile(
   }
 }
 
+/// Run SQL directly against a pool and return the first row.
 pub fn row(sql: String, on pool: Pool) -> Result(List(String), Error) {
   row_with_session_profile(sql, pool, None)
 }
@@ -787,6 +876,7 @@ fn row_with_session_profile(
   }
 }
 
+/// Run SQL directly against a pool and return all rows.
 pub fn rows(sql: String, on pool: Pool) -> Result(List(List(String)), Error) {
   rows_with_session_profile(sql, pool, None)
 }
@@ -820,6 +910,7 @@ fn rows_with_session_profile(
   }
 }
 
+/// Alias for `run`.
 pub fn execute_query(
   query: Query,
   on pool: Pool,
@@ -827,6 +918,7 @@ pub fn execute_query(
   run(query, on: pool)
 }
 
+/// Run a query within a reusable scope.
 pub fn run_in(query: Query, within scope: Scope) -> Result(QueryResult, Error) {
   let Scope(pool, identity, session_profile) = scope
   run_with_session_profile(
@@ -836,6 +928,7 @@ pub fn run_in(query: Query, within scope: Scope) -> Result(QueryResult, Error) {
   )
 }
 
+/// Render and execute a query against a pool.
 pub fn run(query: Query, on pool: Pool) -> Result(QueryResult, Error) {
   run_with_session_profile(query, pool, None)
 }
@@ -926,6 +1019,7 @@ fn run_with_session_profile(
   }
 }
 
+/// Run a query expecting an affected-rows command result.
 pub fn run_affected(query: Query, on pool: Pool) -> Result(Nil, Error) {
   case run(expect_affected(query), on: pool) {
     Ok(Affected) -> Ok(Nil)
@@ -936,10 +1030,12 @@ pub fn run_affected(query: Query, on pool: Pool) -> Result(Nil, Error) {
   }
 }
 
+/// Short alias for `run_affected`.
 pub fn exec(query: Query, on pool: Pool) -> Result(Nil, Error) {
   run_affected(query, on: pool)
 }
 
+/// Run a query within a scope expecting an affected-rows command result.
 pub fn run_affected_in(
   query: Query,
   within scope: Scope,
@@ -953,10 +1049,12 @@ pub fn run_affected_in(
   }
 }
 
+/// Short alias for `run_affected_in`.
 pub fn exec_in(query: Query, within scope: Scope) -> Result(Nil, Error) {
   run_affected_in(query, within: scope)
 }
 
+/// Run a query expecting a scalar string result.
 pub fn run_scalar(query: Query, on pool: Pool) -> Result(String, Error) {
   case run(expect_scalar(query), on: pool) {
     Ok(Scalar(value)) -> Ok(value)
@@ -967,6 +1065,7 @@ pub fn run_scalar(query: Query, on pool: Pool) -> Result(String, Error) {
   }
 }
 
+/// Run a scalar query and map `NotFound` to `None`.
 pub fn run_maybe_scalar(
   query: Query,
   on pool: Pool,
@@ -978,6 +1077,7 @@ pub fn run_maybe_scalar(
   }
 }
 
+/// Run a scoped scalar query and map `NotFound` to `None`.
 pub fn run_maybe_scalar_in(
   query: Query,
   within scope: Scope,
@@ -989,6 +1089,7 @@ pub fn run_maybe_scalar_in(
   }
 }
 
+/// Run a scoped query expecting a scalar string result.
 pub fn run_scalar_in(
   query: Query,
   within scope: Scope,
@@ -1002,6 +1103,7 @@ pub fn run_scalar_in(
   }
 }
 
+/// Run a query expecting the first row.
 pub fn run_row(query: Query, on pool: Pool) -> Result(List(String), Error) {
   case run(expect_row(query), on: pool) {
     Ok(Row(values)) -> Ok(values)
@@ -1012,6 +1114,7 @@ pub fn run_row(query: Query, on pool: Pool) -> Result(List(String), Error) {
   }
 }
 
+/// Run a row query and map `NotFound` to `None`.
 pub fn run_maybe_row(
   query: Query,
   on pool: Pool,
@@ -1023,6 +1126,7 @@ pub fn run_maybe_row(
   }
 }
 
+/// Run a scoped row query and map `NotFound` to `None`.
 pub fn run_maybe_row_in(
   query: Query,
   within scope: Scope,
@@ -1034,6 +1138,7 @@ pub fn run_maybe_row_in(
   }
 }
 
+/// Run a scoped query expecting the first row.
 pub fn run_row_in(
   query: Query,
   within scope: Scope,
@@ -1047,6 +1152,7 @@ pub fn run_row_in(
   }
 }
 
+/// Run a query expecting all rows.
 pub fn run_rows(
   query: Query,
   on pool: Pool,
@@ -1060,6 +1166,7 @@ pub fn run_rows(
   }
 }
 
+/// Run a scoped query expecting all rows.
 pub fn run_rows_in(
   query: Query,
   within scope: Scope,
@@ -1073,6 +1180,7 @@ pub fn run_rows_in(
   }
 }
 
+/// Decode a scalar string with a scalar decoder.
 pub fn decode_scalar(
   value: String,
   using decoder: ScalarDecoder(a),
@@ -1081,6 +1189,7 @@ pub fn decode_scalar(
   decode(value)
 }
 
+/// Run a scalar query and decode the result.
 pub fn run_decode(
   query: Query,
   on pool: Pool,
@@ -1092,6 +1201,7 @@ pub fn run_decode(
   }
 }
 
+/// Alias for `run_decode`.
 pub fn scalar_as_type(
   query: Query,
   on pool: Pool,
@@ -1100,6 +1210,7 @@ pub fn scalar_as_type(
   run_decode(query, on: pool, using: decoder)
 }
 
+/// Scoped alias for `run_decode_in`.
 pub fn scalar_as_type_in(
   query: Query,
   within scope: Scope,
@@ -1108,6 +1219,7 @@ pub fn scalar_as_type_in(
   run_decode_in(query, within: scope, using: decoder)
 }
 
+/// Run and decode a scalar query, mapping `NotFound` to `None`.
 pub fn run_maybe_decode(
   query: Query,
   on pool: Pool,
@@ -1124,6 +1236,7 @@ pub fn run_maybe_decode(
   }
 }
 
+/// Alias for `run_maybe_decode`.
 pub fn maybe_scalar_as_type(
   query: Query,
   on pool: Pool,
@@ -1132,6 +1245,7 @@ pub fn maybe_scalar_as_type(
   run_maybe_decode(query, on: pool, using: decoder)
 }
 
+/// Scoped alias for `run_maybe_decode_in`.
 pub fn maybe_scalar_as_type_in(
   query: Query,
   within scope: Scope,
@@ -1140,6 +1254,7 @@ pub fn maybe_scalar_as_type_in(
   run_maybe_decode_in(query, within: scope, using: decoder)
 }
 
+/// Run and decode a scoped scalar query, mapping `NotFound` to `None`.
 pub fn run_maybe_decode_in(
   query: Query,
   within scope: Scope,
@@ -1156,6 +1271,7 @@ pub fn run_maybe_decode_in(
   }
 }
 
+/// Run and decode a scoped scalar query.
 pub fn run_decode_in(
   query: Query,
   within scope: Scope,
@@ -1167,6 +1283,7 @@ pub fn run_decode_in(
   }
 }
 
+/// Decode a row with a row decoder.
 pub fn decode_row(
   values: List(String),
   using decoder: RowDecoder(a),
@@ -1175,6 +1292,7 @@ pub fn decode_row(
   decode(values)
 }
 
+/// Run a row query and decode the first row.
 pub fn run_decode_row(
   query: Query,
   on pool: Pool,
@@ -1186,6 +1304,7 @@ pub fn run_decode_row(
   }
 }
 
+/// Short alias for `run_decode_row`.
 pub fn one(
   query: Query,
   on pool: Pool,
@@ -1194,6 +1313,7 @@ pub fn one(
   run_decode_row(query, on: pool, using: decoder)
 }
 
+/// Run and decode a row query, mapping `NotFound` to `None`.
 pub fn run_maybe_decode_row(
   query: Query,
   on pool: Pool,
@@ -1210,6 +1330,7 @@ pub fn run_maybe_decode_row(
   }
 }
 
+/// Short alias for `run_maybe_decode_row`.
 pub fn maybe_one(
   query: Query,
   on pool: Pool,
@@ -1218,6 +1339,7 @@ pub fn maybe_one(
   run_maybe_decode_row(query, on: pool, using: decoder)
 }
 
+/// Run and decode a scoped row query, mapping `NotFound` to `None`.
 pub fn run_maybe_decode_row_in(
   query: Query,
   within scope: Scope,
@@ -1234,6 +1356,7 @@ pub fn run_maybe_decode_row_in(
   }
 }
 
+/// Scoped alias for `run_maybe_decode_row_in`.
 pub fn maybe_one_in(
   query: Query,
   within scope: Scope,
@@ -1242,6 +1365,7 @@ pub fn maybe_one_in(
   run_maybe_decode_row_in(query, within: scope, using: decoder)
 }
 
+/// Run a scoped row query and decode the first row.
 pub fn run_decode_row_in(
   query: Query,
   within scope: Scope,
@@ -1253,6 +1377,7 @@ pub fn run_decode_row_in(
   }
 }
 
+/// Scoped short alias for `run_decode_row_in`.
 pub fn one_in(
   query: Query,
   within scope: Scope,
@@ -1261,6 +1386,7 @@ pub fn one_in(
   run_decode_row_in(query, within: scope, using: decoder)
 }
 
+/// Decode every row in a result set with the same row decoder.
 pub fn decode_rows(
   rows: List(List(String)),
   using decoder: RowDecoder(a),
@@ -1283,6 +1409,7 @@ fn decode_rows_loop(
   }
 }
 
+/// Run a rows query and decode all rows.
 pub fn run_decode_rows(
   query: Query,
   on pool: Pool,
@@ -1294,6 +1421,7 @@ pub fn run_decode_rows(
   }
 }
 
+/// Short alias for `run_decode_rows`.
 pub fn all(
   query: Query,
   on pool: Pool,
@@ -1302,6 +1430,7 @@ pub fn all(
   run_decode_rows(query, on: pool, using: decoder)
 }
 
+/// Run a scoped rows query and decode all rows.
 pub fn run_decode_rows_in(
   query: Query,
   within scope: Scope,
@@ -1313,6 +1442,7 @@ pub fn run_decode_rows_in(
   }
 }
 
+/// Scoped short alias for `run_decode_rows_in`.
 pub fn all_in(
   query: Query,
   within scope: Scope,
@@ -1321,10 +1451,12 @@ pub fn all_in(
   run_decode_rows_in(query, within: scope, using: decoder)
 }
 
+/// Run and decode a scalar query as an integer.
 pub fn run_scalar_int(query: Query, on pool: Pool) -> Result(Int, Error) {
   run_decode(query, on: pool, using: int_decoder())
 }
 
+/// Run and decode a scoped scalar query as an integer.
 pub fn run_scalar_int_in(
   query: Query,
   within scope: Scope,
@@ -1332,10 +1464,12 @@ pub fn run_scalar_int_in(
   run_decode_in(query, within: scope, using: int_decoder())
 }
 
+/// Run and decode a scalar query as a float.
 pub fn run_scalar_float(query: Query, on pool: Pool) -> Result(Float, Error) {
   run_decode(query, on: pool, using: float_decoder())
 }
 
+/// Run and decode a scoped scalar query as a float.
 pub fn run_scalar_float_in(
   query: Query,
   within scope: Scope,
@@ -1343,10 +1477,12 @@ pub fn run_scalar_float_in(
   run_decode_in(query, within: scope, using: float_decoder())
 }
 
+/// Run and decode a scalar query as a boolean.
 pub fn run_scalar_bool(query: Query, on pool: Pool) -> Result(Bool, Error) {
   run_decode(query, on: pool, using: bool_decoder())
 }
 
+/// Run and decode a scoped scalar query as a boolean.
 pub fn run_scalar_bool_in(
   query: Query,
   within scope: Scope,
@@ -1354,11 +1490,13 @@ pub fn run_scalar_bool_in(
   run_decode_in(query, within: scope, using: bool_decoder())
 }
 
+/// Render a query into executable SQL, validating placeholder counts.
 pub fn to_sql(query: Query) -> Result(String, Error) {
   let Query(sql, params, _identity, _expectation, _label) = query
   render_sql(sql, params)
 }
 
+/// Render a query into SQL, prefixing any label for easier inspection.
 pub fn inspect_query(query: Query) -> Result(String, Error) {
   case to_sql(query) {
     Ok(rendered) ->
@@ -1370,6 +1508,7 @@ pub fn inspect_query(query: Query) -> Result(String, Error) {
   }
 }
 
+/// Execute command SQL as a proxy user.
 pub fn execute_as(
   end_user: String,
   sql: String,
@@ -1409,6 +1548,7 @@ fn execute_as_with_session_profile(
   }
 }
 
+/// Run scalar SQL as a proxy user.
 pub fn scalar_as(
   end_user: String,
   sql: String,
@@ -1448,6 +1588,7 @@ fn scalar_as_with_session_profile(
   }
 }
 
+/// Run SQL as a proxy user and return the first row.
 pub fn row_as(
   end_user: String,
   sql: String,
@@ -1487,6 +1628,7 @@ fn row_as_with_session_profile(
   }
 }
 
+/// Run SQL as a proxy user and return all rows.
 pub fn rows_as(
   end_user: String,
   sql: String,
@@ -1526,6 +1668,7 @@ fn rows_as_with_session_profile(
   }
 }
 
+/// Read the current open and busy counts for a pool.
 pub fn pool_stats(pool: Pool) -> Result(PoolStats, Error) {
   let Pool(handle, _base_user, _base_password) = pool
   case internal.pool_stats(handle) {
@@ -1534,6 +1677,7 @@ pub fn pool_stats(pool: Pool) -> Result(PoolStats, Error) {
   }
 }
 
+/// Start collecting periodic trace samples for a pool.
 pub fn start_trace(pool: Pool, interval_ms: Int) -> Result(Trace, Error) {
   let Pool(handle, _base_user, _base_password) = pool
   case internal.pool_trace_start(handle, interval_ms) {
@@ -1542,6 +1686,7 @@ pub fn start_trace(pool: Pool, interval_ms: Int) -> Result(Trace, Error) {
   }
 }
 
+/// Stop a running trace and return the collected samples.
 pub fn stop_trace(trace: Trace) -> Result(List(TraceSample), Error) {
   let Trace(trace_handle) = trace
   case internal.pool_trace_stop(trace_handle) {
@@ -1573,6 +1718,7 @@ pub fn stop_trace(trace: Trace) -> Result(List(TraceSample), Error) {
   }
 }
 
+/// Derive aggregate session affinity counters from trace samples.
 pub fn session_metrics(samples: List(TraceSample)) -> SessionMetrics {
   case list.reverse(samples) {
     [
