@@ -135,6 +135,17 @@ gleam docs build
 
 The module-level overview and public API docstrings in [src/oranif.gleam](src/oranif.gleam) are intended to make the generated docs usable without needing to read the implementation first.
 
+## Published docs
+
+The generated API docs are intended to be published on GitHub Pages at:
+
+- `https://ahjulstad.github.io/oranif-gleam/`
+
+Deployment is handled by [.github/workflows/docs-pages.yml](.github/workflows/docs-pages.yml).
+It rebuilds the docs on pushes to `main` that touch package docs or source files, and it can also be run manually with `workflow_dispatch`.
+
+If GitHub Pages has not been enabled for the repository yet, set the Pages source to `GitHub Actions` in the repository settings.
+
 ## Development Flow
 
 Typical work on this repository should follow this order:
