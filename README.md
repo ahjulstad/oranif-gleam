@@ -2,6 +2,8 @@
 
 Standalone Gleam wrapper around the Erlang oranif runtime (`dpi` module).
 
+Work in progress!
+
 ## Disclaimer
 
 AI-authored, but supervised by me. I wanted to test Oracle OCI behaviour, and Gleam was a nice language. Hence, "can I make AI write an driver wrapping the Oracle driver that is nice to use?"
