@@ -23,7 +23,7 @@ jobs:
         with:
           configFile: .devcontainer/devcontainer.json
           runCmd: |
-            export ORANIF_REPO_URL=https://github.com/KonnexionsGmbH/oranif.git
+            export ORANIF_REPO_URL=https://github.com/ahjulstad/oranif.git
             export ORANIF_REPO_REF=master
             export ORANIF_FORK_DIR=/tmp/oranif_fork
             export ORANIF_ODPI_TAG=v5.6.4

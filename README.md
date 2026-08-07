@@ -235,7 +235,7 @@ For local database validation, run:
 - [scripts/run_proxy_wrapper_smoke.sh](scripts/run_proxy_wrapper_smoke.sh)
 
 The smoke script uses a local `oranif` checkout if `ORANIF_FORK_DIR` exists.
-If it does not, the script clones and builds the public fork from `https://github.com/KonnexionsGmbH/oranif.git`.
+If it does not, the script clones and builds the public fork from `https://github.com/ahjulstad/oranif.git`.
 
 You can override the source explicitly with:
 

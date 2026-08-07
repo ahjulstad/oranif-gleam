@@ -4,9 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 EXAMPLE_DIR="${ROOT_DIR}/examples/proxy_wrapper_smoke"
-ORANIF_OVERLAY_DIR="${ROOT_DIR}/scripts/oranif_fork_overlay"
 ORANIF_FORK_DIR="${ORANIF_FORK_DIR:-/workspaces/20260805 gleam/oranif_demo/oranif_fork}"
-ORANIF_REPO_URL="${ORANIF_REPO_URL:-https://github.com/KonnexionsGmbH/oranif.git}"
+ORANIF_REPO_URL="${ORANIF_REPO_URL:-https://github.com/ahjulstad/oranif.git}"
 ORANIF_REPO_REF="${ORANIF_REPO_REF:-master}"
 ORANIF_ODPI_TAG="${ORANIF_ODPI_TAG:-v5.6.4}"
 ORANIF_LINK_ODPI="${ORANIF_LINK_ODPI:-true}"
@@ -22,41 +21,6 @@ ensure_oranif_fork() {
   rm -rf "${ORANIF_FORK_DIR}"
   mkdir -p "$(dirname "${ORANIF_FORK_DIR}")"
   git clone --depth 1 --branch "${ORANIF_REPO_REF}" "${ORANIF_REPO_URL}" "${ORANIF_FORK_DIR}"
-}
-
-overlay_oranif_fork() {
-  if [[ ! -d "${ORANIF_OVERLAY_DIR}" ]]; then
-    echo "oranif overlay directory not found: ${ORANIF_OVERLAY_DIR}" >&2
-    exit 1
-  fi
-
-  mkdir -p "${ORANIF_FORK_DIR}/c_src" "${ORANIF_FORK_DIR}/src"
-
-  if ! rg -q 'ODPI_TAG \?=' "${ORANIF_FORK_DIR}/c_src/Makefile"; then
-    perl -0pi -e 's/ODPI_REPO = https:\/\/github\.com\/oracle\/odpi\n/ODPI_REPO = https:\/\/github.com\/oracle\/odpi\nODPI_TAG ?= v5.6.4\n/' "${ORANIF_FORK_DIR}/c_src/Makefile"
-  fi
-  perl -0pi -e 's/git clone -b v3\.0\.0 --single-branch -c advice\.detachedHead=false \$\(ODPI_REPO\)/git clone -b \$\(ODPI_TAG\) --single-branch -c advice.detachedHead=false \$\(ODPI_REPO\)/' "${ORANIF_FORK_DIR}/c_src/Makefile"
-
-  if ! rg -q 'dpiPool_nif.h' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"; then
-    perl -0pi -e 's/#include "dpiConn_nif\.h"\n/#include "dpiConn_nif.h"\n#include "dpiPool_nif.h"\n/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"
-    perl -0pi -e 's/    DPICONN_NIFS,\n/    DPICONN_NIFS,\n    DPIPOOL_NIFS,\n/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"
-    perl -0pi -e 's/        env, ret, enif_make_atom\(env, "connection"\),\n        enif_make_ulong\(env, st->dpiConn_count\), &ret\);/        env, ret, enif_make_atom(env, "connection"),\n        enif_make_ulong(env, st->dpiConn_count), &ret);\n    enif_make_map_put(\n        env, ret, enif_make_atom(env, "pool"),\n        enif_make_ulong(env, st->dpiPool_count), &ret);/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"
-    perl -0pi -e 's/    st->dpiConn_count = 0;\n/    st->dpiConn_count = 0;\n    st->dpiPool_count = 0;\n/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"
-    perl -0pi -e 's/    DEF_RES\(dpiConn\);\n/    DEF_RES(dpiConn);\n    DEF_RES(dpiPool);\n/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"
-    perl -0pi -e 's/    st->dpiConn_count = old_st->dpiConn_count;\n/    st->dpiConn_count = old_st->dpiConn_count;\n    st->dpiPool_count = old_st->dpiPool_count;\n/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.c"
-  fi
-
-  if ! rg -q 'dpiPool_count' "${ORANIF_FORK_DIR}/c_src/dpi_nif.h"; then
-    perl -0pi -e 's/    unsigned long dpiConn_count;\n/    unsigned long dpiConn_count;\n    unsigned long dpiPool_count;\n/' "${ORANIF_FORK_DIR}/c_src/dpi_nif.h"
-  fi
-
-  if ! rg -q 'dpiPool.hrl' "${ORANIF_FORK_DIR}/src/dpi.erl"; then
-    perl -0pi -e 's/-include\("dpiConn\.hrl"\)\.\n/-include("dpiConn.hrl").\n-include("dpiPool.hrl").\n/' "${ORANIF_FORK_DIR}/src/dpi.erl"
-  fi
-
-  cp "${ORANIF_OVERLAY_DIR}/c_src/dpiPool_nif.c" "${ORANIF_FORK_DIR}/c_src/dpiPool_nif.c"
-  cp "${ORANIF_OVERLAY_DIR}/c_src/dpiPool_nif.h" "${ORANIF_FORK_DIR}/c_src/dpiPool_nif.h"
-  cp "${ORANIF_OVERLAY_DIR}/src/dpiPool.hrl" "${ORANIF_FORK_DIR}/src/dpiPool.hrl"
 }
 
 build_oranif_fork() {
@@ -80,7 +44,6 @@ build_oranif_fork() {
 }
 
 ensure_oranif_fork
-overlay_oranif_fork
 build_oranif_fork
 
 cd "${ROOT_DIR}"
