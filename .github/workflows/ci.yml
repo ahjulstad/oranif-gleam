@@ -13,26 +13,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Erlang and Gleam
-        uses: erlef/setup-beam@v1
+      - name: Run checks in devcontainer
+        uses: devcontainers/ci@v0.3
         with:
-          otp-version: "29"
-          gleam-version: "1.18.1"
-          rebar3-version: "3"
-
-      - name: Root package format check
-        run: gleam format --check src test
-
-      - name: Root package build
-        run: gleam build
-
-      - name: Root package tests
-        run: gleam test
-
-      - name: Example format check
-        working-directory: examples/proxy_wrapper_smoke
-        run: gleam format --check src
-
-      - name: Example build
-        working-directory: examples/proxy_wrapper_smoke
-        run: gleam build
+          configFile: .devcontainer/devcontainer.json
+          runCmd: |
+            gleam format --check src test
+            gleam build
+            gleam test
+            cd examples/proxy_wrapper_smoke
+            gleam format --check src
+            gleam build
