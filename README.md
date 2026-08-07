@@ -311,6 +311,35 @@ For container-specific details, see [.devcontainer/README.md](.devcontainer/READ
 
 This package requires the Erlang `dpi` module at runtime (from oranif).
 
+## Consumer setup before runtime package publish
+
+If you cannot publish a dedicated `oranif` runtime package yet, consumer projects can still fetch `oranif` automatically from Git by combining:
+
+- a normal Gleam dependency on `oranif_gleam`
+- a Rebar dependency on the `oranif` fork
+
+Example consumer `gleam.toml`:
+
+```toml
+[dependencies]
+gleam_stdlib = ">= 1.0.0 and < 2.0.0"
+oranif_gleam = { git = "https://github.com/ahjulstad/oranif-gleam.git", ref = "main" }
+```
+
+Example consumer `rebar.config`:
+
+```erlang
+{deps, [
+	{oranif, {git, "https://github.com/ahjulstad/oranif.git", {branch, "master"}}}
+]}.
+```
+
+Notes:
+
+- This keeps `oranif_gleam` as the Gleam API surface while Rebar fetches and builds the Erlang runtime dependency.
+- Oracle Instant Client still must be available at runtime (for example via devcontainer or host setup).
+- You can pin `{branch, "master"}` to a commit for stricter reproducibility.
+
 ## Integration example
 
 See [examples/proxy_wrapper_smoke](examples/proxy_wrapper_smoke) and run with:
