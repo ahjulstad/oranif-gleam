@@ -8,6 +8,8 @@ on:
 jobs:
   build-test-format:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/devcontainers/base:bookworm
 
     steps:
       - name: Checkout

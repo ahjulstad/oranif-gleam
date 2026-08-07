@@ -234,6 +234,17 @@ For local database validation, run:
 
 - [scripts/run_proxy_wrapper_smoke.sh](scripts/run_proxy_wrapper_smoke.sh)
 
+The smoke script uses a local `oranif` checkout if `ORANIF_FORK_DIR` exists.
+If it does not, the script clones and builds the public fork from `https://github.com/KonnexionsGmbH/oranif.git`.
+
+You can override the source explicitly with:
+
+- `ORANIF_FORK_DIR` — existing local checkout to use
+- `ORANIF_REPO_URL` — git URL to clone when no local checkout is present
+- `ORANIF_REPO_REF` — git branch or tag to clone
+- `ORANIF_ODPI_TAG` — ODPI release tag used when compiling the public fork
+- `ORANIF_LINK_ODPI` — set to `true` to build against a linked ODPI checkout
+
 ## Devcontainer
 
 This repository includes its own `.devcontainer` setup for local Oracle-backed development and for the Oracle integration GitHub workflow.
