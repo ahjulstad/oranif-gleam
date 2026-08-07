@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 EXAMPLE_DIR="${ROOT_DIR}/examples/proxy_wrapper_smoke"
-ORANIF_FORK_DIR="${ORANIF_FORK_DIR:-/workspaces/20260805 gleam/oranif_demo/oranif_fork}"
+ORANIF_FORK_DIR="${ORANIF_FORK_DIR:-/workspaces/20260805 gleam/demos/oranif_demo/oranif_fork}"
 ORANIF_REPO_URL="${ORANIF_REPO_URL:-https://github.com/ahjulstad/oranif.git}"
 ORANIF_REPO_REF="${ORANIF_REPO_REF:-master}"
 ORANIF_ODPI_TAG="${ORANIF_ODPI_TAG:-v5.6.4}"
