@@ -114,6 +114,27 @@ let debug_sql =
 	|> oranif.inspect_query
 ```
 
+## API map
+
+The public API is easiest to read in four layers:
+
+- pool lifecycle: `default_config`, `start`, `stop`, `pool_stats`, `start_trace`, `stop_trace`
+- query building: `query`, `command`, `scalar_query`, `row_query`, `rows_query`, bind helpers, identity helpers
+- execution: `run_*`, `exec*`, `one*`, `all*`, direct `*_as` helpers, and scoped `*_in` helpers
+- decoding: scalar decoders, row decoders, `decode2`, `decode3`, and row-set decoding helpers
+
+If you are new to the package, start with `query` plus `run_scalar`, `one`, or `all`, then move to scopes and session initialization once the basic flow is familiar.
+
+## Generating docs
+
+To build the package documentation locally, run:
+
+```bash
+gleam docs build
+```
+
+The module-level overview and public API docstrings in [src/oranif.gleam](src/oranif.gleam) are intended to make the generated docs usable without needing to read the implementation first.
+
 ## Development Flow
 
 Typical work on this repository should follow this order:

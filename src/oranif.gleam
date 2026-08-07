@@ -1,3 +1,23 @@
+//// Pool-first Oracle access for Gleam on the Erlang runtime.
+////
+//// This module provides a composable query API over the Erlang `oranif`
+//// runtime, with a focus on three things:
+////
+//// - explicit query construction and result expectations
+//// - proxy-user and scope-based execution
+//// - typed decoding of scalar, row, and row-set results
+////
+//// The typical flow is:
+////
+//// 1. Build a `Config` and `start` a `Pool`.
+//// 2. Construct queries with `query`, `command`, `scalar_query`,
+////    `row_query`, or `rows_query`.
+//// 3. Bind parameters, choose an execution scope if needed, and run.
+//// 4. Decode results using the built-in decoders or your own combinators.
+////
+//// For repeated proxy-user or session-initialized work, build a `Scope`
+//// and use the `*_in` execution helpers.
+////
 import gleam/dynamic
 import gleam/float
 import gleam/int
