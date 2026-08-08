@@ -5,10 +5,7 @@
     exec_sql/6,
     probe_user/6,
     probe_user_once/6,
-<<<<<<< HEAD
-=======
     probe_sql_external_auth/2,
->>>>>>> bb451d1 (Add external-auth support for Gleam)
     pool_create/10,
     pool_close/1,
     pool_exec_sql/5,
@@ -92,11 +89,7 @@ pool_create(Host, Port, Service, User, Password, ExternalAuth, Homogeneous, MinS
                         max_sessions => 50,
                         session_increment => 1,
                         homogeneous => Homogeneous,
-<<<<<<< HEAD
-                        externalAuth => ExternalAuth,
-=======
                         external_auth => ExternalAuth,
->>>>>>> bb451d1 (Add external-auth support for Gleam)
                         get_mode => 'DPI_MODE_POOL_GET_WAIT',
                         timeout => TimeoutSec,
                         wait_timeout => WaitTimeoutMs
