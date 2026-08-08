@@ -5,17 +5,21 @@
     exec_sql/6,
     probe_user/6,
     probe_user_once/6,
+<<<<<<< HEAD
+=======
+    probe_sql_external_auth/2,
+>>>>>>> bb451d1 (Add external-auth support for Gleam)
     pool_create/10,
     pool_close/1,
-    pool_exec_sql/4,
-    pool_exec_sql_with_session/6,
+    pool_exec_sql/5,
+    pool_exec_sql_with_session/7,
     pool_exec_sql_metric/4,
-    pool_probe_sql/4,
-    pool_probe_sql_with_session/6,
-    pool_probe_row/4,
-    pool_probe_row_with_session/6,
-    pool_probe_rows/4,
-    pool_probe_rows_with_session/6,
+    pool_probe_sql/5,
+    pool_probe_sql_with_session/7,
+    pool_probe_row/5,
+    pool_probe_row_with_session/7,
+    pool_probe_rows/5,
+    pool_probe_rows_with_session/7,
     pool_probe_sql_metric/4,
     pool_probe_burst_metric/5,
     pool_probe_burst_metric_hold/6,
@@ -88,12 +92,20 @@ pool_create(Host, Port, Service, User, Password, ExternalAuth, Homogeneous, MinS
                         max_sessions => 50,
                         session_increment => 1,
                         homogeneous => Homogeneous,
+<<<<<<< HEAD
                         externalAuth => ExternalAuth,
+=======
+                        external_auth => ExternalAuth,
+>>>>>>> bb451d1 (Add external-auth support for Gleam)
                         get_mode => 'DPI_MODE_POOL_GET_WAIT',
                         timeout => TimeoutSec,
                         wait_timeout => WaitTimeoutMs
                     },
-                    case dpi:pool_create(Context, User, Password, ConnectString, CommonParams, PoolParams) of
+                    {UserArg, PasswordArg} = case ExternalAuth of
+                        true -> {null, null};
+                        false -> {User, Password}
+                    end,
+                    case dpi:pool_create(Context, UserArg, PasswordArg, ConnectString, CommonParams, PoolParams) of
                         Pool when is_reference(Pool) ->
                             _ = init_pool_metrics_table(),
                             {ok, {Context, Pool}};
@@ -117,13 +129,18 @@ pool_close({Context, Pool}) when is_reference(Context), is_reference(Pool) ->
 pool_close(Other) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_exec_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
+pool_exec_sql({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_no_fetch(Conn, Sql)
     end, undefined, []) of
         {ok, Result, _BusySample} ->
@@ -131,18 +148,23 @@ pool_exec_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
         {error, _} = Error ->
             Error
     end;
-pool_exec_sql(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+pool_exec_sql(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_exec_sql_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+pool_exec_sql_with_session({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql),
          is_binary(RequestedTag),
          is_list(SetupSql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_no_fetch(Conn, Sql)
     end, RequestedTag, SetupSql) of
         {ok, Result, _BusySample} ->
@@ -150,7 +172,7 @@ pool_exec_sql_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, R
         {error, _} = Error ->
             Error
     end;
-pool_exec_sql_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
+pool_exec_sql_with_session(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_exec_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -172,13 +194,18 @@ pool_exec_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
 pool_exec_sql_metric(Other, _AcquireUser, _AcquirePassword, _Sql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_probe_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
+pool_probe_sql({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_and_fetch_first(Conn, Sql)
     end, undefined, []) of
         {ok, Result, _BusySample} ->
@@ -186,18 +213,23 @@ pool_probe_sql({Context, Pool}, AcquireUser, AcquirePassword, Sql)
         {error, _} = Error ->
             Error
     end;
-pool_probe_sql(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+pool_probe_sql(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_probe_sql_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+pool_probe_sql_with_session({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql),
          is_binary(RequestedTag),
          is_list(SetupSql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_and_fetch_first(Conn, Sql)
     end, RequestedTag, SetupSql) of
         {ok, Result, _BusySample} ->
@@ -205,16 +237,21 @@ pool_probe_sql_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, 
         {error, _} = Error ->
             Error
     end;
-pool_probe_sql_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
+pool_probe_sql_with_session(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_probe_row({Context, Pool}, AcquireUser, AcquirePassword, Sql)
+pool_probe_row({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_and_fetch_row(Conn, Sql)
     end, undefined, []) of
         {ok, Result, _BusySample} ->
@@ -222,18 +259,23 @@ pool_probe_row({Context, Pool}, AcquireUser, AcquirePassword, Sql)
         {error, _} = Error ->
             Error
     end;
-pool_probe_row(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+pool_probe_row(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_probe_row_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+pool_probe_row_with_session({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql),
          is_binary(RequestedTag),
          is_list(SetupSql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_and_fetch_row(Conn, Sql)
     end, RequestedTag, SetupSql) of
         {ok, Result, _BusySample} ->
@@ -241,16 +283,21 @@ pool_probe_row_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, 
         {error, _} = Error ->
             Error
     end;
-pool_probe_row_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
+pool_probe_row_with_session(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_probe_rows({Context, Pool}, AcquireUser, AcquirePassword, Sql)
+pool_probe_rows({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_and_fetch_rows(Conn, Sql)
     end, undefined, []) of
         {ok, Result, _BusySample} ->
@@ -258,18 +305,23 @@ pool_probe_rows({Context, Pool}, AcquireUser, AcquirePassword, Sql)
         {error, _} = Error ->
             Error
     end;
-pool_probe_rows(Other, _AcquireUser, _AcquirePassword, _Sql) ->
+pool_probe_rows(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql) ->
     {error, {invalid_pool_handle, Other}}.
 
-pool_probe_rows_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
+pool_probe_rows_with_session({Context, Pool}, ExternalAuth, AcquireUser, AcquirePassword, Sql, RequestedTag, SetupSql)
     when is_reference(Context),
          is_reference(Pool),
+         is_boolean(ExternalAuth),
          is_binary(AcquireUser),
          is_binary(AcquirePassword),
          is_binary(Sql),
          is_binary(RequestedTag),
          is_list(SetupSql) ->
-    case with_pool_connection(Pool, AcquireUser, AcquirePassword, fun(Conn) ->
+    {AcquireUserArg, AcquirePasswordArg} = case ExternalAuth of
+        true -> {AcquireUser, null};
+        false -> {AcquireUser, AcquirePassword}
+    end,
+    case with_pool_connection(Pool, AcquireUserArg, AcquirePasswordArg, fun(Conn) ->
         execute_and_fetch_rows(Conn, Sql)
     end, RequestedTag, SetupSql) of
         {ok, Result, _BusySample} ->
@@ -277,7 +329,7 @@ pool_probe_rows_with_session({Context, Pool}, AcquireUser, AcquirePassword, Sql,
         {error, _} = Error ->
             Error
     end;
-pool_probe_rows_with_session(Other, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
+pool_probe_rows_with_session(Other, _ExternalAuth, _AcquireUser, _AcquirePassword, _Sql, _RequestedTag, _SetupSql) ->
     {error, {invalid_pool_handle, Other}}.
 
 pool_probe_sql_metric({Context, Pool}, AcquireUser, AcquirePassword, Sql)
@@ -398,6 +450,34 @@ probe_user_once(Host, Port, Service, User, Password, Sql)
                     ConnectString = tns(Host, Port, Service),
                     CommonParams = #{encoding => "AL32UTF8", nencoding => "AL32UTF8"},
                     case dpi:conn_create(Context, User, Password, ConnectString, CommonParams, #{}) of
+                        Conn when is_reference(Conn) ->
+                            Result = execute_and_fetch_first(Conn, Sql),
+                            _ = safe_conn_close(Conn),
+                            _ = safe_context_destroy(Context),
+                            Result;
+                        Error ->
+                            _ = safe_context_destroy(Context),
+                            {error, Error}
+                    end;
+                {'EXIT', Reason} ->
+                    {error, {context_create_failed, Reason}};
+                Other ->
+                    {error, {context_create_failed, Other}}
+            end;
+        Error ->
+            Error
+    end.
+
+probe_sql_external_auth(Dsn, Sql)
+    when is_binary(Dsn),
+         is_binary(Sql) ->
+    case ensure_loaded() of
+        ok ->
+            case catch dpi:context_create(?DPI_MAJOR_VERSION, ?DPI_MINOR_VERSION) of
+                Context when is_reference(Context) ->
+                    CommonParams = #{encoding => "AL32UTF8", nencoding => "AL32UTF8"},
+                    ConnParams = #{external_auth => true},
+                    case dpi:conn_create(Context, <<>>, <<>>, Dsn, CommonParams, ConnParams) of
                         Conn when is_reference(Conn) ->
                             Result = execute_and_fetch_first(Conn, Sql),
                             _ = safe_conn_close(Conn),

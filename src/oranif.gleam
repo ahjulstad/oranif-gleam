@@ -123,7 +123,12 @@ pub type PoolConfig {
 
 /// A started connection pool.
 pub opaque type Pool {
-  Pool(handle: dynamic.Dynamic, base_user: String, base_password: String)
+  Pool(
+    handle: dynamic.Dynamic,
+    base_user: String,
+    base_password: String,
+    external_auth: Bool,
+  )
 }
 
 /// A reusable execution scope carrying identity and optional session setup.
@@ -789,16 +794,37 @@ pub fn start(config: Config) -> Result(Pool, Error) {
       wait_timeout_ms,
     )
   {
-    Ok(handle) -> Ok(Pool(handle, user, password))
+    Ok(handle) -> {
+      let checkout_user = case external_auth {
+        True -> ""
+        False -> user
+      }
+      let checkout_password = case external_auth {
+        True -> ""
+        False -> password
+      }
+      Ok(Pool(handle, checkout_user, checkout_password, external_auth))
+    }
     Error(message) -> Error(classify_db_error(message))
   }
 }
 
 /// Close a started pool.
 pub fn stop(pool: Pool) -> Result(Nil, Error) {
-  let Pool(handle, _base_user, _base_password) = pool
+  let Pool(handle, _base_user, _base_password, _external_auth) = pool
   case internal.pool_close(handle) {
     Ok(_) -> Ok(Nil)
+    Error(message) -> Error(classify_db_error(message))
+  }
+}
+
+/// Run SQL with direct external authentication, mirroring the Python driver flow.
+pub fn probe_sql_external_auth(
+  dsn: String,
+  sql: String,
+) -> Result(String, Error) {
+  case internal.probe_sql_external_auth(dsn, sql) {
+    Ok(value) -> Ok(value)
     Error(message) -> Error(classify_db_error(message))
   }
 }
@@ -813,10 +839,10 @@ fn execute_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(Nil, Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   case session_profile {
     None ->
-      case internal.pool_exec_sql(handle, base_user, base_password, sql) {
+      case internal.pool_exec_sql(handle, external_auth, base_user, base_password, sql) {
         Ok(_) -> Ok(Nil)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -824,6 +850,7 @@ fn execute_with_session_profile(
       case
         internal.pool_exec_sql_with_session(
           handle,
+          external_auth,
           base_user,
           base_password,
           sql,
@@ -847,10 +874,10 @@ fn scalar_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(String, Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   case session_profile {
     None ->
-      case internal.pool_probe_sql(handle, base_user, base_password, sql) {
+      case internal.pool_probe_sql(handle, external_auth, base_user, base_password, sql) {
         Ok(value) -> Ok(value)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -858,6 +885,7 @@ fn scalar_with_session_profile(
       case
         internal.pool_probe_sql_with_session(
           handle,
+          external_auth,
           base_user,
           base_password,
           sql,
@@ -881,10 +909,10 @@ fn row_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(List(String), Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   case session_profile {
     None ->
-      case internal.pool_probe_row(handle, base_user, base_password, sql) {
+      case internal.pool_probe_row(handle, external_auth, base_user, base_password, sql) {
         Ok(values) -> Ok(values)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -892,6 +920,7 @@ fn row_with_session_profile(
       case
         internal.pool_probe_row_with_session(
           handle,
+          external_auth,
           base_user,
           base_password,
           sql,
@@ -915,10 +944,10 @@ fn rows_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(List(List(String)), Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   case session_profile {
     None ->
-      case internal.pool_probe_rows(handle, base_user, base_password, sql) {
+      case internal.pool_probe_rows(handle, external_auth, base_user, base_password, sql) {
         Ok(values) -> Ok(values)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -926,6 +955,7 @@ fn rows_with_session_profile(
       case
         internal.pool_probe_rows_with_session(
           handle,
+          external_auth,
           base_user,
           base_password,
           sql,
@@ -1552,11 +1582,11 @@ fn execute_as_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(Nil, Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   let proxy_user = proxy_user(base_user, end_user)
   case session_profile {
     None ->
-      case internal.pool_exec_sql(handle, proxy_user, base_password, sql) {
+      case internal.pool_exec_sql(handle, external_auth, proxy_user, base_password, sql) {
         Ok(_) -> Ok(Nil)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -1564,6 +1594,7 @@ fn execute_as_with_session_profile(
       case
         internal.pool_exec_sql_with_session(
           handle,
+          external_auth,
           proxy_user,
           base_password,
           sql,
@@ -1592,11 +1623,11 @@ fn scalar_as_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(String, Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   let proxy_user = proxy_user(base_user, end_user)
   case session_profile {
     None ->
-      case internal.pool_probe_sql(handle, proxy_user, base_password, sql) {
+      case internal.pool_probe_sql(handle, external_auth, proxy_user, base_password, sql) {
         Ok(value) -> Ok(value)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -1604,6 +1635,7 @@ fn scalar_as_with_session_profile(
       case
         internal.pool_probe_sql_with_session(
           handle,
+          external_auth,
           proxy_user,
           base_password,
           sql,
@@ -1632,11 +1664,11 @@ fn row_as_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(List(String), Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   let proxy_user = proxy_user(base_user, end_user)
   case session_profile {
     None ->
-      case internal.pool_probe_row(handle, proxy_user, base_password, sql) {
+      case internal.pool_probe_row(handle, external_auth, proxy_user, base_password, sql) {
         Ok(values) -> Ok(values)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -1644,6 +1676,7 @@ fn row_as_with_session_profile(
       case
         internal.pool_probe_row_with_session(
           handle,
+          external_auth,
           proxy_user,
           base_password,
           sql,
@@ -1672,11 +1705,11 @@ fn rows_as_with_session_profile(
   pool: Pool,
   session_profile: Option(SessionProfile),
 ) -> Result(List(List(String)), Error) {
-  let Pool(handle, base_user, base_password) = pool
+  let Pool(handle, base_user, base_password, external_auth) = pool
   let proxy_user = proxy_user(base_user, end_user)
   case session_profile {
     None ->
-      case internal.pool_probe_rows(handle, proxy_user, base_password, sql) {
+      case internal.pool_probe_rows(handle, external_auth, proxy_user, base_password, sql) {
         Ok(values) -> Ok(values)
         Error(message) -> Error(classify_db_error(message))
       }
@@ -1684,6 +1717,7 @@ fn rows_as_with_session_profile(
       case
         internal.pool_probe_rows_with_session(
           handle,
+          external_auth,
           proxy_user,
           base_password,
           sql,
@@ -1699,7 +1733,7 @@ fn rows_as_with_session_profile(
 
 /// Read the current open and busy counts for a pool.
 pub fn pool_stats(pool: Pool) -> Result(PoolStats, Error) {
-  let Pool(handle, _base_user, _base_password) = pool
+  let Pool(handle, _base_user, _base_password, _external_auth) = pool
   case internal.pool_stats(handle) {
     Ok(#(open, busy)) -> Ok(PoolStats(open:, busy:))
     Error(message) -> Error(classify_db_error(message))
@@ -1708,7 +1742,7 @@ pub fn pool_stats(pool: Pool) -> Result(PoolStats, Error) {
 
 /// Start collecting periodic trace samples for a pool.
 pub fn start_trace(pool: Pool, interval_ms: Int) -> Result(Trace, Error) {
-  let Pool(handle, _base_user, _base_password) = pool
+  let Pool(handle, _base_user, _base_password, _external_auth) = pool
   case internal.pool_trace_start(handle, interval_ms) {
     Ok(trace_handle) -> Ok(Trace(trace_handle))
     Error(message) -> Error(classify_db_error(message))

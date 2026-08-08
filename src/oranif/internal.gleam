@@ -25,6 +25,12 @@ fn probe_user_ffi(
   sql: String,
 ) -> Result(String, dynamic.Dynamic)
 
+@external(erlang, "oranif_bridge", "probe_sql_external_auth")
+fn probe_sql_external_auth_ffi(
+  dsn: String,
+  sql: String,
+) -> Result(String, dynamic.Dynamic)
+
 @external(erlang, "oranif_bridge", "pool_create")
 fn pool_create_ffi(
   host: String,
@@ -45,6 +51,7 @@ fn pool_close_ffi(pool: dynamic.Dynamic) -> Result(String, dynamic.Dynamic)
 @external(erlang, "oranif_bridge", "pool_exec_sql")
 fn pool_exec_sql_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -53,6 +60,7 @@ fn pool_exec_sql_ffi(
 @external(erlang, "oranif_bridge", "pool_exec_sql_with_session")
 fn pool_exec_sql_with_session_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -63,6 +71,7 @@ fn pool_exec_sql_with_session_ffi(
 @external(erlang, "oranif_bridge", "pool_probe_sql")
 fn pool_probe_sql_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -71,6 +80,7 @@ fn pool_probe_sql_ffi(
 @external(erlang, "oranif_bridge", "pool_probe_sql_with_session")
 fn pool_probe_sql_with_session_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -81,6 +91,7 @@ fn pool_probe_sql_with_session_ffi(
 @external(erlang, "oranif_bridge", "pool_probe_row")
 fn pool_probe_row_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -89,6 +100,7 @@ fn pool_probe_row_ffi(
 @external(erlang, "oranif_bridge", "pool_probe_row_with_session")
 fn pool_probe_row_with_session_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -99,6 +111,7 @@ fn pool_probe_row_with_session_ffi(
 @external(erlang, "oranif_bridge", "pool_probe_rows")
 fn pool_probe_rows_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -107,6 +120,7 @@ fn pool_probe_rows_ffi(
 @external(erlang, "oranif_bridge", "pool_probe_rows_with_session")
 fn pool_probe_rows_with_session_ffi(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -138,6 +152,16 @@ pub fn probe_user(
   case
     probe_user_ffi(host, port, service, user, password, "select user from dual")
   {
+    Ok(value) -> Ok(value)
+    Error(reason) -> Error(string.inspect(reason))
+  }
+}
+
+pub fn probe_sql_external_auth(
+  dsn: String,
+  sql: String,
+) -> Result(String, String) {
+  case probe_sql_external_auth_ffi(dsn, sql) {
     Ok(value) -> Ok(value)
     Error(reason) -> Error(string.inspect(reason))
   }
@@ -211,11 +235,12 @@ pub fn pool_close(pool: dynamic.Dynamic) -> Result(Nil, String) {
 
 pub fn pool_exec_sql(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
 ) -> Result(Nil, String) {
-  case pool_exec_sql_ffi(pool, user, password, sql) {
+  case pool_exec_sql_ffi(pool, external_auth, user, password, sql) {
     Ok(_) -> Ok(Nil)
     Error(reason) -> Error(string.inspect(reason))
   }
@@ -223,6 +248,7 @@ pub fn pool_exec_sql(
 
 pub fn pool_exec_sql_with_session(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -230,14 +256,7 @@ pub fn pool_exec_sql_with_session(
   setup_sql: List(String),
 ) -> Result(Nil, String) {
   case
-    pool_exec_sql_with_session_ffi(
-      pool,
-      user,
-      password,
-      sql,
-      requested_tag,
-      setup_sql,
-    )
+    pool_exec_sql_with_session_ffi(pool, external_auth, user, password, sql, requested_tag, setup_sql)
   {
     Ok(_) -> Ok(Nil)
     Error(reason) -> Error(string.inspect(reason))
@@ -246,11 +265,12 @@ pub fn pool_exec_sql_with_session(
 
 pub fn pool_probe_sql(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
 ) -> Result(String, String) {
-  case pool_probe_sql_ffi(pool, user, password, sql) {
+  case pool_probe_sql_ffi(pool, external_auth, user, password, sql) {
     Ok(value) -> to_text(value)
     Error(reason) -> Error(string.inspect(reason))
   }
@@ -258,6 +278,7 @@ pub fn pool_probe_sql(
 
 pub fn pool_probe_sql_with_session(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -265,14 +286,7 @@ pub fn pool_probe_sql_with_session(
   setup_sql: List(String),
 ) -> Result(String, String) {
   case
-    pool_probe_sql_with_session_ffi(
-      pool,
-      user,
-      password,
-      sql,
-      requested_tag,
-      setup_sql,
-    )
+    pool_probe_sql_with_session_ffi(pool, external_auth, user, password, sql, requested_tag, setup_sql)
   {
     Ok(value) -> to_text(value)
     Error(reason) -> Error(string.inspect(reason))
@@ -281,11 +295,12 @@ pub fn pool_probe_sql_with_session(
 
 pub fn pool_probe_row(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
 ) -> Result(List(String), String) {
-  case pool_probe_row_ffi(pool, user, password, sql) {
+  case pool_probe_row_ffi(pool, external_auth, user, password, sql) {
     Ok(values) -> values |> list.map(to_text) |> collect_results([])
     Error(reason) -> Error(string.inspect(reason))
   }
@@ -293,6 +308,7 @@ pub fn pool_probe_row(
 
 pub fn pool_probe_row_with_session(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -300,14 +316,7 @@ pub fn pool_probe_row_with_session(
   setup_sql: List(String),
 ) -> Result(List(String), String) {
   case
-    pool_probe_row_with_session_ffi(
-      pool,
-      user,
-      password,
-      sql,
-      requested_tag,
-      setup_sql,
-    )
+    pool_probe_row_with_session_ffi(pool, external_auth, user, password, sql, requested_tag, setup_sql)
   {
     Ok(values) -> values |> list.map(to_text) |> collect_results([])
     Error(reason) -> Error(string.inspect(reason))
@@ -316,11 +325,12 @@ pub fn pool_probe_row_with_session(
 
 pub fn pool_probe_rows(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
 ) -> Result(List(List(String)), String) {
-  case pool_probe_rows_ffi(pool, user, password, sql) {
+  case pool_probe_rows_ffi(pool, external_auth, user, password, sql) {
     Ok(rows) -> rows |> list.map(normalize_row) |> collect_row_results([])
     Error(reason) -> Error(string.inspect(reason))
   }
@@ -328,6 +338,7 @@ pub fn pool_probe_rows(
 
 pub fn pool_probe_rows_with_session(
   pool: dynamic.Dynamic,
+  external_auth: Bool,
   user: String,
   password: String,
   sql: String,
@@ -335,14 +346,7 @@ pub fn pool_probe_rows_with_session(
   setup_sql: List(String),
 ) -> Result(List(List(String)), String) {
   case
-    pool_probe_rows_with_session_ffi(
-      pool,
-      user,
-      password,
-      sql,
-      requested_tag,
-      setup_sql,
-    )
+    pool_probe_rows_with_session_ffi(pool, external_auth, user, password, sql, requested_tag, setup_sql)
   {
     Ok(rows) -> rows |> list.map(normalize_row) |> collect_row_results([])
     Error(reason) -> Error(string.inspect(reason))
