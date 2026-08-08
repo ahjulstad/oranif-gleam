@@ -106,6 +106,7 @@ pub type Config {
     service: String,
     user: String,
     password: String,
+    external_auth: Bool,
     pool: PoolConfig,
   )
 }
@@ -700,6 +701,7 @@ pub fn default_config() -> Config {
     service: "FREEPDB1",
     user: "",
     password: "",
+    external_auth: False,
     pool: default_pool_config(),
   )
 }
@@ -727,6 +729,11 @@ pub fn user(config: Config, user: String) -> Config {
 /// Set the base database password for a config value.
 pub fn password(config: Config, password: String) -> Config {
   Config(..config, password:)
+}
+
+/// Enable or disable external authentication for pool creation.
+pub fn external_auth(config: Config, external_auth: Bool) -> Config {
+  Config(..config, external_auth:)
 }
 
 /// Replace the pool settings inside a config value.
@@ -765,6 +772,7 @@ pub fn start(config: Config) -> Result(Pool, Error) {
     service,
     user,
     password,
+    external_auth,
     PoolConfig(min_sessions, idle_timeout_sec, wait_timeout_ms, homogeneous),
   ) = config
   case
@@ -774,6 +782,7 @@ pub fn start(config: Config) -> Result(Pool, Error) {
       service,
       user,
       password,
+      external_auth,
       homogeneous,
       min_sessions,
       idle_timeout_sec,

@@ -5,7 +5,7 @@
     exec_sql/6,
     probe_user/6,
     probe_user_once/6,
-    pool_create/9,
+    pool_create/10,
     pool_close/1,
     pool_exec_sql/4,
     pool_exec_sql_with_session/6,
@@ -66,12 +66,13 @@ exec_sql(Host, Port, Service, User, Password, Sql)
 probe_user(Host, Port, Service, User, Password, Sql) ->
     probe_user_once(Host, Port, Service, User, Password, Sql).
 
-pool_create(Host, Port, Service, User, Password, Homogeneous, MinSessions, TimeoutSec, WaitTimeoutMs)
+pool_create(Host, Port, Service, User, Password, ExternalAuth, Homogeneous, MinSessions, TimeoutSec, WaitTimeoutMs)
     when is_binary(Host),
          is_integer(Port),
          is_binary(Service),
          is_binary(User),
          is_binary(Password),
+         is_boolean(ExternalAuth),
          is_boolean(Homogeneous),
          is_integer(MinSessions),
          is_integer(TimeoutSec),
@@ -87,6 +88,7 @@ pool_create(Host, Port, Service, User, Password, Homogeneous, MinSessions, Timeo
                         max_sessions => 50,
                         session_increment => 1,
                         homogeneous => Homogeneous,
+                        externalAuth => ExternalAuth,
                         get_mode => 'DPI_MODE_POOL_GET_WAIT',
                         timeout => TimeoutSec,
                         wait_timeout => WaitTimeoutMs
